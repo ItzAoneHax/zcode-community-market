@@ -1,0 +1,19 @@
+{
+  "description": "zcode-community-market: 会话启动时同步运行时目录（loader/导航/面板/核心模块），并检查设置页注入补丁——缺失且未豁免时自动重补（app.asar 变更后需完全退出重开 ZCode 生效）；解释器按 python3→python→py -3 回退",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "shell": true,
+            "command": "python3 \"${ZCODE_PLUGIN_ROOT}/hooks/session-start.py\" || python \"${ZCODE_PLUGIN_ROOT}/hooks/session-start.py\" || py -3 \"${ZCODE_PLUGIN_ROOT}/hooks/session-start.py\"",
+            "timeoutMs": 120000,
+            "statusMessage": "zcode-community-market: 同步运行时并检查设置页入口…"
+          }
+        ]
+      }
+    ]
+  }
+}

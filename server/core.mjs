@@ -1,0 +1,402 @@
+/* zcode-community-market 核心逻辑（纯模块，无 stdio 副作用）。
+ * server.mjs（MCP 协议层）与 patch/cmarket-loader.cjs（主进程注入）共用。 */
+"use strict";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { cli } from "./cli.mjs";
+import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog } from "./catalog.mjs";
+import { settings } from "./settings.mjs";
+
+export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);
+
+/* ---------- 工具注册表 ---------- */
+const TOOLS = [];
+function tool(t) { TOOLS.push(t); }
+export const log = (...a) => process.stderr.write(`[community-market] ${a.join(" ")}\n`);
+
+/* ================= 业务逻辑 ================= */
+
+function catalogWithState() {
+  const cat = mergedCatalog(bundledIndex);
+  return cat;
+}
+
+async function installedMap() {
+  const list = await cli.listInstalled(); // array
+  const map = new Map();
+  for (const p of list || []) map.set(p.id, p);
+  return map;
+}
+
+/* 安装目录条目：按策略走 marketplace add → install */
+async function installEntry(entry) {
+  const inst = entry?.install || {};
+  if (!inst.type) throw new Error("该插件没有可用的自动安装策略，请查看仓库说明手动安装");
+  if (inst.type === "manual") {
+    return {
+      ok: false, manual: true, repo: entry.repo,
+      url: `https://github.com/${entry.repo}`,
+      message: "该插件需按仓库 README 手动安装（通常为 git clone 后运行 install 脚本）。",
+    };
+  }
+  // marketplace / marketplace-try 共用：先加市场（已存在视为成功）
+  let mktId = inst.marketplace || null;
+  try {
+    const out = await cli.marketplaceAdd(inst.source);
+    const m = /Added marketplace ([A-Za-z0-9_.@-]+)/.exec(out || "");
+    if (m) mktId = m[1];
+  } catch (e) {
+    const s = String(e?.message || e);
+    if (!/already|exists/i.test(s)) {
+      if (inst.type === "marketplace") throw e;
+      return { ok: false, manual: true, repo: entry.repo, url: `https://github.com/${entry.repo}`, message: `自动添加市场失败：${s.slice(0, 200)}` };
+    }
+    // 已存在：从市场列表反查 id
+    try {
+      const mkts = await cli.marketplaceList();
+      const hit = (Array.isArray(mkts) ? mkts : mkts?.marketplaces || []).find(
+        (x) => inst.source.startsWith(String(x?.source?.repo || x?.source?.url || "\u0000")) || x.name === inst.marketplace
+      );
+      if (hit) mktId = hit.name || hit.id;
+    } catch { /* 用 hint */ }
+  }
+  if (!mktId) mktId = inst.marketplace || inst.pluginName;
+  // 在该市场里找插件（优先 pluginName，否则取该市场唯一可用项）
+  const ov = await cli.listOverview();
+  const cands = (ov?.available || []).filter((a) => a.marketplace === mktId && !a.installed);
+  let target = cands.find((c) => c.name === inst.pluginName) || null;
+  if (!target && cands.length === 1) target = cands[0];
+  if (!target) {
+    const already = (ov?.installed || []).find((i) => i.marketplace === mktId && i.name === inst.pluginName);
+    if (already) return { ok: true, id: already.id, message: "已安装", alreadyInstalled: true };
+    throw new Error(`在市场 ${mktId} 中未找到可安装的插件（期望 ${inst.pluginName || "任意"}）`);
+  }
+  const out = await cli.install(target.id);
+  return { ok: true, id: target.id, message: out.split("\n").slice(-1)[0] || "installed" };
+}
+
+
+/* ================= REGISTRY：模型侧工具 ================= */
+
+tool({
+  name: "open_market",
+  description:
+    "Open the Community Market panel (community plugin marketplace) in the sidebar, which the user sees. " +
+    "Use when the user wants to browse, install, update or manage ZCode plugins.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  panel: true,
+  openPanel: true,
+  readOnly: true,
+  handler: async () => ({
+    text: "Community market panel opened. The user can browse, install, update and manage plugins there.",
+  }),
+});
+
+tool({
+  name: "search_plugins",
+  description:
+    "Search the community plugin catalog (curated index + GitHub zcode-plugin topic). " +
+    "Returns matching plugins with install state. To install, prefer asking the user via the panel (open_market).",
+  inputSchema: {
+    type: "object",
+    properties: { query: { type: "string", description: "Keyword to match name/description/repo. Empty = all." } },
+  },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async (args) => {
+    const q = String(args?.query || "").toLowerCase();
+    const cat = catalogWithState();
+    const inst = await installedMap();
+    const hits = cat.plugins
+      .filter((p) => !q || [p.name, p.displayName, p.description, p.repo].join(" ").toLowerCase().includes(q))
+      .map((p) => {
+        const ip = inst.get(`${p.name}@${p.marketplace || ""}`) || [...inst.values()].find((i) => (i.name === p.name));
+        return { name: p.name, repo: p.repo, description: p.description, stars: p.stars, category: p.category, installed: !!ip, installType: p.install?.type };
+      })
+      .slice(0, 30);
+    return { text: JSON.stringify(hits, null, 1), structured: { results: hits } };
+  },
+});
+
+tool({
+  name: "install_plugin",
+  description:
+    "Install a community plugin by repo (owner/name, must exist in the catalog) or by exact reference (name@marketplace). " +
+    "Runs marketplace add + install through the zcode CLI. Prefer open_market for interactive use.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      ref: { type: "string", description: "owner/name repo from the catalog, or name@marketplace reference." },
+    },
+    required: ["ref"],
+  },
+  visibility: ["model", "app"],
+  readOnly: false,
+  handler: async (args) => {
+    const ref = String(args?.ref || "").trim();
+    if (!ref) throw new Error("ref required");
+    let result;
+    if (ref.includes("/")) {
+      const cat = catalogWithState();
+      const entry = cat.plugins.find((p) => p.repo?.toLowerCase() === ref.toLowerCase());
+      if (!entry) throw new Error(`repo ${ref} not in catalog; ask the user to refresh or install manually`);
+      result = await installEntry(entry);
+    } else {
+      const out = await cli.install(ref);
+      result = { ok: true, id: ref, message: out.split("\n").slice(-1)[0] || "installed" };
+    }
+    return { text: JSON.stringify(result), structured: result };
+  },
+});
+
+tool({
+  name: "list_installed",
+  description: "List installed ZCode plugins with enable state and data paths.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async () => {
+    const list = await cli.listInstalled();
+    const simple = (list || []).map((p) => ({ id: p.id, name: p.name, version: p.version, marketplace: p.marketplace, enabled: p.enabled }));
+    return { text: JSON.stringify(simple, null, 1), structured: { installed: simple } };
+  },
+});
+
+/* ================= REGISTRY：面板侧工具（visibility:["app"]） ================= */
+
+tool({
+  name: "get_state",
+  description: "Panel bootstrap: catalog + installed list + marketplaces in one call.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["app"],
+  readOnly: true,
+  handler: async () => {
+    const [overview, mkts] = await Promise.all([cli.listOverview().catch(() => null), cli.marketplaceList().catch(() => null)]);
+    const installed = overview?.installed || [];
+    const available = overview?.available || [];
+    const availById = new Map(available.map((a) => [a.id, a]));
+    const cat = catalogWithState();
+    const plugins = cat.plugins.map((p) => {
+      const ip = installed.find((i) => i.name === p.name);
+      const ap = ip ? availById.get(ip.id) : null;
+      return {
+        ...p,
+        installedId: ip?.id || null,
+        installedVersion: ip?.version ?? null,
+        enabled: ip?.enabled ?? null,
+        marketVersion: ap?.version ?? null,
+        updateAvailable: !!(ip && ap?.version && ip?.version && ap.version !== ip.version),
+      };
+    });
+    return {
+      text: "ok",
+      structured: {
+        catalogUpdatedAt: cat.updatedAt,
+        plugins,
+        installed: installed.map((i) => ({
+          id: i.id, name: i.name, version: i.version ?? null, marketplace: i.marketplace,
+          enabled: i.enabled, description: availById.get(i.id)?.description ?? "",
+        })),
+        marketplaces: (Array.isArray(mkts) ? mkts : mkts?.marketplaces || []).map((m) => ({ id: m.id ?? m.name, name: m.name, source: m.source?.repo || m.source?.url || m.source?.path || "" })),
+      },
+    };
+  },
+});
+
+tool({
+  name: "do_install",
+  description: "Install a catalog plugin by repo (panel button).",
+  inputSchema: { type: "object", properties: { repo: { type: "string" } }, required: ["repo"] },
+  visibility: ["app"],
+  readOnly: false,
+  handler: async (args) => {
+    const cat = catalogWithState();
+    const entry = cat.plugins.find((p) => p.repo?.toLowerCase() === String(args.repo).toLowerCase());
+    if (!entry) throw new Error(`repo not in catalog: ${args.repo}`);
+    const r = await installEntry(entry);
+    return { text: JSON.stringify(r), structured: r };
+  },
+});
+
+tool({
+  name: "do_uninstall",
+  description: "Uninstall an installed plugin by id (name@marketplace).",
+  inputSchema: { type: "object", properties: { id: { type: "string" }, keepData: { type: "boolean" } }, required: ["id"] },
+  visibility: ["app"],
+  readOnly: false,
+  handler: async (args) => {
+    const out = await cli.uninstall(String(args.id), { keepData: !!args.keepData });
+    return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "uninstalled" } };
+  },
+});
+
+tool({
+  name: "do_update",
+  description: "Update a plugin: refresh its marketplace manifest, then update.",
+  inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  visibility: ["app"],
+  readOnly: false,
+  handler: async (args) => {
+    const id = String(args.id);
+    const mkt = id.includes("@") ? id.split("@").slice(1).join("@") : "";
+    if (mkt) await cli.marketplaceUpdate(mkt).catch(() => {});
+    const out = await cli.update(id);
+    return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "updated" } };
+  },
+});
+
+tool({
+  name: "do_toggle",
+  description: "Enable or disable an installed plugin.",
+  inputSchema: {
+    type: "object",
+    properties: { id: { type: "string" }, enable: { type: "boolean" } },
+    required: ["id", "enable"],
+  },
+  visibility: ["app"],
+  readOnly: false,
+  handler: async (args) => {
+    const out = await (args.enable ? cli.enable(String(args.id)) : cli.disable(String(args.id)));
+    return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "done" } };
+  },
+});
+
+tool({
+  name: "refresh_catalog",
+  description: "Refresh the community catalog from the GitHub zcode-plugin topic (manual action).",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["app"],
+  readOnly: false,
+  handler: async () => {
+    const repos = await fetchGithub();
+    const cache = refreshCache(bundledIndex, repos);
+    return { text: `refreshed ${cache.plugins.length} plugins`, structured: { ok: true, count: cache.plugins.length, updatedAt: cache.updatedAt } };
+  },
+});
+
+tool({
+  name: "market_ping",
+  description: "Panel bridge health check (app-only).",
+  inputSchema: {
+    type: "object",
+    properties: { echo: { type: "string", description: "Optional text to echo back." } },
+  },
+  visibility: ["app"],
+  readOnly: true,
+  handler: async (args) => ({ text: "pong " + String(args?.echo ?? "") }),
+});
+
+/* ---- 共享设置中心（模型与面板皆可调用）---- */
+
+tool({
+  name: "settings_register",
+  description:
+    "Register a settings schema for a plugin in the shared settings hub (other plugins call this; users edit values in the Community Market panel's Settings tab). " +
+    "schema = { title?, description?, properties: { key: { type: 'string'|'number'|'boolean', title?, description?, default?, enum? } } }. " +
+    "Read values back with settings_get.",
+  inputSchema: {
+    type: "object",
+    properties: {
+      pluginId: { type: "string", description: "Your plugin id, e.g. my-plugin@my-marketplace" },
+      schema: { type: "object", description: "Settings schema" },
+    },
+    required: ["pluginId", "schema"],
+  },
+  visibility: ["model", "app"],
+  readOnly: false,
+  handler: async (args) => { const r = settings.register(args.pluginId, args.schema); return { text: JSON.stringify(r), structured: r }; },
+});
+
+tool({
+  name: "settings_list",
+  description: "List plugins that registered settings in the shared hub.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async () => { const l = settings.list(); return { text: JSON.stringify(l), structured: { settings: l } }; },
+});
+
+tool({
+  name: "settings_get",
+  description: "Read settings values (schema + values with defaults merged) for a plugin from the shared hub.",
+  inputSchema: { type: "object", properties: { pluginId: { type: "string" } }, required: ["pluginId"] },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async (args) => { const r = settings.get(args.pluginId); return { text: JSON.stringify(r), structured: r }; },
+});
+
+tool({
+  name: "settings_set",
+  description: "Write settings values for a plugin into the shared hub (validated against the registered schema).",
+  inputSchema: {
+    type: "object",
+    properties: { pluginId: { type: "string" }, values: { type: "object" } },
+    required: ["pluginId", "values"],
+  },
+  visibility: ["model", "app"],
+  readOnly: false,
+  handler: async (args) => { const r = settings.set(args.pluginId, args.values); return { text: JSON.stringify(r), structured: r }; },
+});
+
+/* ---- 二期：设置页注入（补丁）管理 ---- */
+
+import { spawn } from "node:child_process";
+function runPatcher(args, timeoutMs = 600000) {
+  const py = process.env.ZCODE_CMARKET_PYTHON || "python";
+  const script = path.join(PLUGIN_ROOT, "patch", "patch_install.py");
+  return new Promise((resolve) => {
+    const p = spawn(py, [script, ...args], { windowsHide: true });
+    let out = "", err = "";
+    const timer = setTimeout(() => { try { p.kill(); } catch {} }, timeoutMs);
+    p.stdout.on("data", (d) => (out += d));
+    p.stderr.on("data", (d) => (err += d));
+    p.on("error", (e) => { clearTimeout(timer); resolve({ ok: false, output: String(e) }); });
+    p.on("close", (code) => { clearTimeout(timer); resolve({ ok: code === 0, output: (out + (err ? "\n" + err : "")).trim() }); });
+  });
+}
+
+tool({
+  name: "patch_status",
+  description: "Status of the settings-page injection patch (asar patch + nav loader).",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async () => {
+    const r = await runPatcher(["status"], 60000);
+    let st = {};
+    try { st = JSON.parse(r.output.split("\n").filter(Boolean).pop() || "{}"); } catch { /* 非状态输出 */ }
+    return { text: r.output, structured: { ok: r.ok, installed: !!st.injected, pendingTmp: !!st.pendingTmp, loaderReady: st.loaderReady !== false, asar: st.asar, error: st.error } };
+  },
+});
+
+tool({
+  name: "patch_install",
+  description:
+    "Install the settings-page injection: appends a loader line to ZCode's app.asar main entry (a file modification to the client). " +
+    "After success, fully quit and reopen ZCode for it to take effect. Safe to re-run; coexists with other asar patches.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: false,
+  handler: async () => {
+    const r = await runPatcher(["install"]);
+    return { text: r.output, structured: { ok: r.ok, output: r.output } };
+  },
+});
+
+tool({
+  name: "patch_remove",
+  description:
+    "Remove the settings-page injection (strips the loader line from app.asar) and opt out of auto re-patching. Fully quit and reopen ZCode to take effect.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: false,
+  handler: async () => {
+    const r = await runPatcher(["remove"]);
+    return { text: r.output, structured: { ok: r.ok, output: r.output } };
+  },
+});
+
+export const ALL_TOOLS = TOOLS;

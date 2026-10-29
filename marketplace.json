@@ -1,0 +1,15 @@
+{
+  "name": "zcode-community-market",
+  "owner": "limin",
+  "plugins": [
+    {
+      "name": "zcode-community-market",
+      "description": "Community plugin marketplace for ZCode: explore, install, update and manage community plugins from a side panel; shared settings hub; optional settings-page entry.",
+      "version": "0.2.1",
+      "author": "limin",
+      "license": "MIT",
+      "source": "./"
+    }
+  ],
+  "version": "0.2.1"
+}

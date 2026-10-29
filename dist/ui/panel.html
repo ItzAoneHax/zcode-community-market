@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>社区插件市场</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #6b7280; --border: #e5e7eb;
+    --card: #f8f9fb; --accent: #2f6fdb; --accent-soft: rgba(47,111,219,.12);
+    --ok: #16a34a; --warn: #d97706; --danger: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17171c; --fg: #e8e8ea; --muted: #9ca3af; --border: #2d2d36;
+      --card: #1f1f26; --accent: #5b9bff; --accent-soft: rgba(91,155,255,.16);
+      --ok: #4ade80; --warn: #fbbf24; --danger: #f87171;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--fg); font-size: 13px; display: flex; flex-direction: column; }
+  header { display: flex; align-items: center; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  header h1 { font-size: 14px; margin: 0 10px 0 0; }
+  .tab { padding: 5px 12px; border-radius: 999px; cursor: pointer; color: var(--muted); border: 1px solid transparent; user-select: none; }
+  .tab.active { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+  .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--muted); border-top-color: transparent; border-radius: 50%; animation: r .7s linear infinite; vertical-align: -2px; }
+  @keyframes r { to { transform: rotate(360deg); } }
+  main { flex: 1; overflow-y: auto; padding: 12px; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; align-items: center; }
+  input[type=text], input[type=number], select { background: var(--card); border: 1px solid var(--border); color: var(--fg); border-radius: 6px; padding: 5px 8px; font-size: 12.5px; }
+  input[type=text] { flex: 1; min-width: 120px; }
+  .chip { padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); cursor: pointer; color: var(--muted); background: var(--card); }
+  .chip.active { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .card .row1 { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .card .name { font-weight: 600; font-size: 13.5px; }
+  .card .stars { color: var(--warn); font-size: 12px; }
+  .card .cat { font-size: 11px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; }
+  .card .desc { color: var(--muted); margin: 5px 0 8px; line-height: 1.45; }
+  .badge { font-size: 11px; border-radius: 4px; padding: 1px 6px; }
+  .badge.installed { color: var(--ok); border: 1px solid var(--ok); }
+  .badge.update { color: var(--warn); border: 1px solid var(--warn); }
+  button { background: var(--accent); color: #fff; border: none; border-radius: 6px; padding: 5px 12px; font-size: 12.5px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
+  button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  button:disabled { opacity: .5; cursor: default; }
+  .btnrow { display: flex; gap: 6px; }
+  .note { color: var(--muted); font-size: 12px; line-height: 1.5; }
+  .kv { display: grid; grid-template-columns: 130px 1fr; gap: 4px 10px; align-items: center; margin: 4px 0; }
+  .kv .k { color: var(--muted); }
+  .form-row { display: grid; grid-template-columns: 130px 1fr; gap: 6px 10px; align-items: center; margin: 7px 0; }
+  .form-row .k { color: var(--muted); }
+  .form-row .hint { grid-column: 2; color: var(--muted); font-size: 11.5px; }
+  .settings-block { margin-bottom: 14px; }
+  .settings-block h3 { margin: 0 0 2px; font-size: 13px; }
+  .switch { position: relative; width: 34px; height: 19px; display: inline-block; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch i { position: absolute; inset: 0; background: var(--border); border-radius: 999px; transition: .15s; }
+  .switch i::after { content: ""; position: absolute; width: 15px; height: 15px; border-radius: 50%; background: #fff; top: 2px; left: 2px; transition: .15s; }
+  .switch input:checked + i { background: var(--accent); }
+  .switch input:checked + i::after { left: 17px; }
+  #toast { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); background: rgba(20,20,26,.92); color: #fff; border-radius: 8px; padding: 7px 14px; font-size: 12.5px; max-width: 90%; display: none; z-index: 9; }
+  a { color: var(--accent); }
+  .empty { color: var(--muted); text-align: center; padding: 30px 0; }
+  .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>社区插件市场</h1>
+  <div class="tab active" data-tab="explore">探索</div>
+  <div class="tab" data-tab="installed">已安装</div>
+  <div class="tab" data-tab="hub">设置中心</div>
+  <div class="tab" data-tab="about">关于</div>
+  <span id="busy" style="margin-left:auto"></span>
+</header>
+<main id="main"></main>
+<div id="toast"></div>
+
+<script>
+/* ================= 传输层：iframe postMessage 桥 → 宿主 → MCP server ================= */
+const transport = (() => {
+  let nextId = 1;
+  const pending = new Map();
+  window.addEventListener("message", (ev) => {
+    const m = ev.data;
+    if (!m || m.jsonrpc !== "2.0") return;
+    if (m.id != null && pending.has(m.id)) {
+      const p = pending.get(m.id); pending.delete(m.id);
+      m.error ? p.reject(new Error(m.error?.message || "rpc error")) : p.resolve(m.result);
+    }
+  });
+  const post = (msg) => window.parent.postMessage(msg, "*");
+  function request(method, params, timeoutMs) {
+    return new Promise((resolve, reject) => {
+      const id = nextId++;
+      pending.set(id, { resolve, reject });
+      post({ jsonrpc: "2.0", id, method, params });
+      setTimeout(() => { if (pending.has(id)) { pending.delete(id); reject(new Error(method + " 超时")); } }, timeoutMs || 120000);
+    });
+  }
+  const initialized = request("initialize", {
+    protocolVersion: "2025-06-18", capabilities: {},
+    clientInfo: { name: "community-market-panel", version: "0.1.0" },
+  }, 10000).then(() => post({ jsonrpc: "2.0", method: "notifications/initialized" })).catch(() => {});
+  return {
+    callTool: async (name, args) => {
+      await initialized;
+      const r = await request("tools/call", { name, arguments: args || {} });
+      if (r?.isError) throw new Error((r.content || []).map((c) => c.text).join("\n") || "tool error");
+      return r?.structuredContent ?? {};
+    },
+  };
+})();
+window.__cmarket = transport;
+
+/* ================= UI 基础 ================= */
+const $ = (s) => document.querySelector(s);
+const main = $("#main");
+let busyCount = 0;
+function busy(on) { busyCount += on ? 1 : -1; if (busyCount < 0) busyCount = 0; $("#busy").innerHTML = busyCount ? '<span class="spin"></span>' : ""; }
+let toastTimer;
+function toast(msg, ms) {
+  const t = $("#toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => (t.style.display = "none"), ms || 2600);
+}
+const CATS = { all: "全部", monitoring: "监控", appearance: "外观", productivity: "效率", "dev-tools": "开发", agent: "编排", other: "其它" };
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+let state = { plugins: [], installed: [], marketplaces: [], catalogUpdatedAt: null };
+let tab = "explore";
+let query = "", catFilter = "all";
+
+document.querySelectorAll(".tab").forEach((el) =>
+  el.addEventListener("click", () => {
+    tab = el.dataset.tab;
+    document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x === el));
+    render();
+  })
+);
+
+async function loadState() {
+  busy(1);
+  try {
+    state = await transport.callTool("get_state");
+    render();
+  } catch (e) { toast("加载失败: " + e.message, 5000); }
+  busy(0);
+}
+
+/* ================= 各标签页 ================= */
+
+function renderExplore() {
+  const hits = state.plugins.filter((p) => {
+    if (catFilter !== "all" && (p.category || "other") !== catFilter) return false;
+    if (!query) return true;
+    return [p.name, p.displayName, p.description, p.repo].join(" ").toLowerCase().includes(query.toLowerCase());
+  });
+  const chips = Object.entries(CATS).map(([k, v]) => `<span class="chip ${catFilter === k ? "active" : ""}" data-cat="${k}">${v}</span>`).join("");
+  main.innerHTML = `
+    <div class="toolbar">
+      <input type="text" id="q" placeholder="搜索名称 / 描述 / 仓库…" value="${esc(query)}">
+      ${chips}
+    </div>
+    ${hits.length ? hits.map(cardHtml).join("") : `<div class="empty">没有匹配的插件</div>`}
+    <div class="note" style="margin-top:10px">索引更新于 ${state.catalogUpdatedAt ? new Date(state.catalogUpdatedAt).toLocaleString() : "内置版本（未刷新过）"} ·
+      <a href="#" id="refresh-catalog">从 GitHub 刷新</a></div>`;
+  $("#q").addEventListener("input", (e) => { query = e.target.value; renderExplore(); });
+  main.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => { catFilter = c.dataset.cat; renderExplore(); }));
+  $("#refresh-catalog").addEventListener("click", async (e) => {
+    e.preventDefault(); busy(1);
+    try { const r = await transport.callTool("refresh_catalog"); toast(`已刷新，共 ${r.count} 个插件`); await loadState(); }
+    catch (err) { toast("刷新失败: " + err.message, 5000); }
+    busy(0);
+  });
+  bindCardActions();
+}
+
+function cardHtml(p) {
+  const badges = [
+    p.installedId ? '<span class="badge installed">已安装</span>' : "",
+    p.updateAvailable ? '<span class="badge update">有更新</span>' : "",
+    p.unverified ? '<span class="badge" style="color:var(--muted);border:1px solid var(--border)">未验证</span>' : "",
+  ].join(" ");
+  const btns = p.installedId
+    ? `<a href="https://github.com/${esc(p.repo)}" target="_blank"><button class="ghost">仓库</button></a>`
+    : p.install?.type === "manual"
+      ? `<a href="https://github.com/${esc(p.repo)}" target="_blank"><button class="ghost">手动安装 ↗</button></a>`
+      : `<button class="primary" data-install="${esc(p.repo)}">安装</button>`;
+  return `<div class="card" data-card="${esc(p.repo)}">
+    <div class="row1">
+      <span class="name">${esc(p.displayName || p.name)}</span>
+      <span class="mono" style="color:var(--muted);font-size:11.5px">${esc(p.repo)}</span>
+      ${p.stars != null ? `<span class="stars">★ ${p.stars}</span>` : ""}
+      <span class="cat">${CATS[p.category] || p.category || "其它"}</span>
+      ${badges}
+    </div>
+    <div class="desc">${esc(p.description)}</div>
+    <div class="btnrow">${btns} <span class="opmsg" style="color:var(--muted)"></span></div>
+  </div>`;
+}
+
+function bindCardActions() {
+  main.querySelectorAll("[data-install]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const repo = b.dataset.install;
+      const msg = b.closest(".card").querySelector(".opmsg");
+      b.disabled = true; msg.textContent = "安装中…（可能需要拉取仓库）"; busy(1);
+      try {
+        const r = await transport.callTool("do_install", { repo });
+        if (r.ok) { msg.textContent = "✅ " + (r.message || "安装成功"); toast("安装成功：能力将在新会话生效"); await loadState(); }
+        else { msg.textContent = r.manual ? "需手动安装，见仓库说明" : "失败"; if (r.manual) window.open(r.url, "_blank"); }
+      } catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); }
+      b.disabled = false; busy(0);
+    })
+  );
+}
+
+function renderInstalled() {
+  if (!state.installed.length) { main.innerHTML = '<div class="empty">还没有已安装的插件</div>'; return; }
+  main.innerHTML =
+    `<div class="note" style="margin-bottom:10px">共 ${state.installed.length} 个 · 启用/禁用与安装/卸载的能力变更从<b>新会话</b>开始生效。</div>` +
+    state.installed
+      .map((p) => {
+        const cat = state.plugins.find((x) => x.name === p.name && x.installedId === p.id);
+        const upd = cat?.updateAvailable;
+        return `<div class="card">
+        <div class="row1">
+          <span class="name">${esc(p.name)}</span>
+          <span class="mono" style="color:var(--muted);font-size:11.5px">${esc(p.id)}</span>
+          ${p.version ? `<span class="badge" style="color:var(--muted);border:1px solid var(--border)">v${esc(p.version)}</span>` : ""}
+          ${upd ? '<span class="badge update">可更新</span>' : ""}
+        </div>
+        ${p.description ? `<div class="desc">${esc(p.description)}</div>` : ""}
+        <div class="btnrow" style="align-items:center">
+          <label class="switch"><input type="checkbox" data-toggle="${esc(p.id)}" ${p.enabled ? "checked" : ""}><i></i></label>
+          <span style="color:var(--muted);font-size:12px">${p.enabled ? "已启用" : "已禁用"}</span>
+          <span style="flex:1"></span>
+          ${upd ? `<button data-update="${esc(p.id)}">更新</button>` : ""}
+          <button class="danger" data-uninstall="${esc(p.id)}">卸载</button>
+        </div>
+        <div class="opmsg" style="color:var(--muted);margin-top:6px"></div>
+      </div>`;
+      })
+      .join("");
+  main.querySelectorAll("[data-toggle]").forEach((el) =>
+    el.addEventListener("change", async () => {
+      const id = el.dataset.toggle, enable = el.checked;
+      const msg = el.closest(".card").querySelector(".opmsg");
+      busy(1);
+      try { await transport.callTool("do_toggle", { id, enable }); msg.textContent = enable ? "已启用（新会话生效）" : "已禁用（新会话生效）"; }
+      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 100); el.checked = !enable; }
+      busy(0);
+    })
+  );
+  main.querySelectorAll("[data-update]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const msg = b.closest(".card").querySelector(".opmsg");
+      b.disabled = true; msg.textContent = "更新中…"; busy(1);
+      try { const r = await transport.callTool("do_update", { id: b.dataset.update }); msg.textContent = "✅ " + (r.message || "已更新"); await loadState(); }
+      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); }
+      b.disabled = false; busy(0);
+    })
+  );
+  main.querySelectorAll("[data-uninstall]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const id = b.dataset.uninstall;
+      if (!confirm(`卸载 ${id}？（插件数据默认一并删除）`)) return;
+      const msg = b.closest(".card").querySelector(".opmsg");
+      b.disabled = true; msg.textContent = "卸载中…"; busy(1);
+      try { await transport.callTool("do_uninstall", { id }); msg.textContent = "✅ 已卸载"; toast("已卸载（新会话生效）"); await loadState(); }
+      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); b.disabled = false; }
+      busy(0);
+    })
+  );
+}
+
+async function renderHub() {
+  main.innerHTML = '<div class="empty"><span class="spin"></span> 加载设置中心…</div>';
+  let list;
+  try { list = (await transport.callTool("settings_list")).settings || []; }
+  catch (e) { main.innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; return; }
+  if (!list.length) {
+    main.innerHTML = `<div class="empty">还没有插件注册设置。</div>
+    <div class="note" style="max-width:520px;margin:0 auto;line-height:1.7">
+      <b>插件接入契约</b>：在你的插件里通过 MCP 调用 <span class="mono">settings_register(pluginId, schema)</span> 注册表单
+      （schema.properties 每项 {type: string|number|boolean, title, description, default, enum}），
+      用 <span class="mono">settings_get(pluginId)</span> 读值。用户在本面板修改后，你的插件下次读取即得新值。</div>`;
+    return;
+  }
+  const blocks = [];
+  for (const s of list) {
+    let detail;
+    try { detail = await transport.callTool("settings_get", { pluginId: s.pluginId }); }
+    catch { continue; }
+    const rows = Object.entries(detail.schema.properties || {}).map(([k, prop]) => {
+      const v = detail.values?.[k] ?? prop.default ?? "";
+      const hint = prop.description ? `<div class="hint">${esc(prop.description)}</div>` : "";
+      let input;
+      if (prop.enum) input = `<select data-k="${esc(k)}">${prop.enum.map((o) => `<option value="${esc(o)}" ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
+      else if (prop.type === "boolean") input = `<label class="switch"><input type="checkbox" data-k="${esc(k)}" ${v ? "checked" : ""}><i></i></label>`;
+      else if (prop.type === "number") input = `<input type="number" data-k="${esc(k)}" value="${esc(v)}" style="width:140px">`;
+      else input = `<input type="text" data-k="${esc(k)}" value="${esc(v)}" style="width:100%">`;
+      return `<div class="form-row"><div class="k">${esc(prop.title || k)}</div><div>${input}</div>${hint}</div>`;
+    }).join("");
+    blocks.push(`<div class="card settings-block" data-plugin="${esc(s.pluginId)}">
+      <h3>${esc(s.title)} <span class="mono" style="color:var(--muted);font-weight:400;font-size:11.5px">${esc(s.pluginId)}</span></h3>
+      ${s.description ? `<div class="note">${esc(s.description)}</div>` : ""}
+      ${rows}
+      <div class="btnrow" style="margin-top:8px"><button data-save="${esc(s.pluginId)}">保存</button><span class="opmsg" style="color:var(--muted)"></span></div>
+    </div>`);
+  }
+  main.innerHTML = blocks.join("");
+  main.querySelectorAll("[data-save]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const pid = b.dataset.save;
+      const card = b.closest(".card");
+      const detail = await transport.callTool("settings_get", { pluginId: pid }).catch(() => null);
+      if (!detail) return;
+      const values = {};
+      card.querySelectorAll("[data-k]").forEach((el) => {
+        const k = el.dataset.k;
+        const prop = detail.schema.properties[k] || {};
+        values[k] = prop.type === "number" ? Number(el.value) : prop.type === "boolean" ? el.checked : el.value;
+      });
+      const msg = card.querySelector(".opmsg");
+      busy(1);
+      try { await transport.callTool("settings_set", { pluginId: pid, values }); msg.textContent = "✅ 已保存"; }
+      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); }
+      busy(0);
+    })
+  );
+}
+
+async function renderAbout() {
+  let patch;
+  try { patch = await transport.callTool("patch_status"); } catch { patch = { installed: false }; }
+  main.innerHTML = `
+  <div class="card">
+    <div class="row1"><span class="name">社区插件市场</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">v0.2.0</span></div>
+    <div class="desc">探索、安装、更新与管理 ZCode 社区插件；提供插件共享设置中心。</div>
+    <div class="kv">
+      <span class="k">索引更新于</span><span>${state.catalogUpdatedAt ? new Date(state.catalogUpdatedAt).toLocaleString() : "内置版本"}</span>
+      <span class="k">收录插件</span><span>${state.plugins.length} 个</span>
+      <span class="k">已安装插件</span><span>${state.installed.length} 个</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row1"><span class="name">设置页入口</span>${
+      patch.installed ? '<span class="badge installed">已注入</span>' : '<span class="badge" style="color:var(--muted);border:1px solid var(--border)">未注入</span>'
+    }${patch.pendingTmp ? '<span class="badge update">待收尾(完全退出ZCode后生效)</span>' : ""}</div>
+    <div class="desc">把「社区插件市场」导航项注入 ZCode 设置页侧栏（修改客户端 app.asar，追加一行动态 import；与其它补丁插件互不干扰，ZCode 升级后由会话钩子自动重补）。安装/卸载后需<b>完全退出 ZCode 再重新打开</b>。</div>
+    <div class="btnrow">
+      ${patch.installed
+        ? `<button class="danger" id="patch-remove">卸载设置页入口</button>`
+        : `<button id="patch-install">注入设置页入口</button>`}
+      <span class="opmsg" style="color:var(--muted)"></span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row1"><span class="name">插件市场源</span></div>
+    ${state.marketplaces.map((m) => `<div class="kv"><span class="k mono">${esc(m.id || m.name)}</span><span class="mono" style="font-size:11.5px">${esc(m.source)}</span></div>`).join("") || '<div class="note">无</div>'}
+  </div>`;
+  const msg = main.querySelector(".opmsg");
+  const bind = (id, toolName, doneMsg) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("click", async () => {
+      el.disabled = true; msg.textContent = "执行中（重打包约需十几秒）…"; busy(1);
+      try {
+        const r = await transport.callTool(toolName);
+        msg.textContent = (r.output || "").split("\n").slice(-2).join(" ").slice(0, 160);
+        toast(doneMsg); renderAbout();
+      } catch (e) { msg.textContent = "❌ " + e.message.slice(0, 140); el.disabled = false; }
+      busy(0);
+    });
+  };
+  bind("patch-install", "patch_install", "已提交注入，完全退出 ZCode 后自动收尾，重开生效");
+  bind("patch-remove", "patch_remove", "已提交卸载，完全退出 ZCode 后重开生效");
+}
+
+function render() {
+  if (tab === "explore") renderExplore();
+  else if (tab === "installed") renderInstalled();
+  else if (tab === "hub") renderHub();
+  else renderAbout();
+}
+
+loadState();
+</script>
+</body>
+</html>

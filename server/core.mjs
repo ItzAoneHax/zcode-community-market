@@ -8,7 +8,7 @@ import { cli } from "./cli.mjs";
 import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog, dataDir } from "./catalog.mjs";
 import { settings } from "./settings.mjs";
 
-export const PLUGIN_VERSION = "0.3.2";
+export const PLUGIN_VERSION = "0.3.3";
 const SELF_ID = "zcode-community-market@zcode-community-market";
 export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);

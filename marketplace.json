@@ -1,7 +1,7 @@
 {
   "name": "zcode-community-market",
   "owner": "ItzAoneHax",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "plugins": [
     {
       "name": "zcode-community-market",
@@ -13,7 +13,7 @@
       "description_i18n": {
         "zh-CN": "ZCode 社区插件市场：在侧栏面板里探索、安装、更新与管理社区插件；内置可供其他插件调用的共享设置中心，可选注入 ZCode 设置页入口。"
       },
-      "version": "0.3.2",
+      "version": "0.3.3",
       "author": "ItzAoneHax",
       "license": "MIT",
       "category": "utilities",

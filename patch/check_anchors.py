@@ -9,7 +9,9 @@ ZCode 每次大版本更新后运行：python patch/check_anchors.py
 所以不能只搜完整字符串——分别验证：
   1) 拼接常量 `settings-section-nav` 存在；
   2) 分节配置里仍有 id 为 `plugin` 的分节（agentCapabilities 组）；
-  3) `data-settings-panel-frame` / `data-settings-content-frame` / `settings-page` 字面量存在。
+  3) `data-settings-panel-frame` / `data-settings-content-frame` / `settings-page` 字面量存在；
+  4) 官方条目激活/未激活的 class token 存在（settings-nav.js 打开面板时靠置换这些
+     token 收敛官方条目高亮，改名则收敛静默失效——两条目同时高亮回归）。
 """
 import json
 import os
@@ -44,6 +46,10 @@ def main():
         ("data-settings-panel-frame", b"data-settings-panel-frame", raw.count(b"data-settings-panel-frame") >= 1),
         ("data-settings-content-frame", b"data-settings-content-frame", raw.count(b"data-settings-content-frame") >= 1),
         ("settings-page", b"settings-page", raw.count(b"settings-page") >= 1),
+        ("激活态 token bg-surface-hover（官方条目高亮收敛依赖）", b"bg-surface-hover", raw.count(b"bg-surface-hover") >= 2),
+        ("激活态 token text-foreground", b"text-foreground", raw.count(b"text-foreground") >= 2),
+        ("未激活态 token text-remote-foreground-muted", b"text-remote-foreground-muted", raw.count(b"text-remote-foreground-muted") >= 1),
+        ("官方条目属性 data-settings-section-nav", b"data-settings-section-nav", raw.count(b"data-settings-section-nav") >= 1),
     ]
     fails = 0
     print(f"asar: {asar}")

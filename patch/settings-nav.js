@@ -211,7 +211,10 @@
     host.id = HOST_ID;
     host.setAttribute("data-cmarket", "panel");
     applyHostRect(host, rect);
-    styleOf(host, { zIndex: "30", background: "var(--color-bg-1, #fff)", display: "flex", flexDirection: "column" });
+    // z-index 必须拉满：设置页右Pane 上有宿主的透明 overlay 层（Radix portal 类，z-40/50），
+    // z=30 时面板内容透过透明层可见、但点击全被吃掉（页签点了没反应）。
+    // 实测：纯净 Chromium 同款 iframe 挂载点击正常，仅真实宿主内失灵 → v0.4.1 修复。
+    styleOf(host, { zIndex: "2147483647", background: "var(--color-bg-1, #fff)", display: "flex", flexDirection: "column" });
     var tip = document.createElement("div");
     tip.textContent = "社区插件市场加载中…（Esc 关闭）";
     styleOf(tip, { padding: "24px", color: "var(--color-text-3, #888)", fontSize: "13px" });

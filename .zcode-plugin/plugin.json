@@ -1,6 +1,6 @@
 {
   "name": "zcode-community-market",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Community plugin marketplace for ZCode: explore, install, update and manage community plugins from a side panel; includes a shared settings hub other plugins can call, and an optional settings-page entry injected into ZCode's Settings.",
   "description_i18n": {
     "zh-CN": "ZCode 社区插件市场：在侧栏面板里探索、安装、更新与管理社区插件；内置可供其他插件调用的共享设置中心，可选注入 ZCode 设置页入口。"

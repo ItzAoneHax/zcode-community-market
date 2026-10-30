@@ -8,7 +8,7 @@ import { cli } from "./cli.mjs";
 import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog, dataDir } from "./catalog.mjs";
 import { settings } from "./settings.mjs";
 
-export const PLUGIN_VERSION = "0.3.3";
+export const PLUGIN_VERSION = "0.4.0";
 const SELF_ID = "zcode-community-market@zcode-community-market";
 export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);
@@ -47,10 +47,74 @@ function catalogWithState() {
   return cat;
 }
 
+/* ---------- 面板状态缓存：get_state 串行跑 2 个 CLI（各约 2s）太慢，
+ * 这里做 TTL + stale-while-revalidate：新开面板秒回；变更操作后失效重建。 ---------- */
+const STATE_TTL_MS = 15000;
+let stateCache = null; // { at, data }
+let stateRefreshing = null; // 进行中的重建（去重并发触发）
+
+function buildStateData() {
+  // 单条 CLI（list --available）拿到 installed+available；marketplaces 已拆到 list_marketplaces
+  return cli.listOverview().then((overview) => {
+    const installed = overview?.installed || [];
+    const available = overview?.available || [];
+    const availById = new Map(available.map((a) => [a.id, a]));
+    const cat = catalogWithState();
+    const plugins = cat.plugins.map((p) => {
+      const ip = installed.find((i) => i.name === p.name);
+      const ap = ip ? availById.get(ip.id) : null;
+      return {
+        ...p,
+        installedId: ip?.id || null,
+        installedVersion: ip?.version ?? null,
+        enabled: ip?.enabled ?? null,
+        marketVersion: ap?.version ?? null,
+        updateAvailable: !!(ip && ap?.version && ip?.version && ap.version !== ip.version),
+      };
+    });
+    return {
+      selfVersion: PLUGIN_VERSION,
+      catalogUpdatedAt: cat.updatedAt,
+      plugins,
+      installed: installed.map((i) => ({
+        id: i.id, name: i.name, version: i.version ?? null, marketplace: i.marketplace,
+        enabled: i.enabled, description: availById.get(i.id)?.description ?? "",
+      })),
+    };
+  });
+}
+
+function refreshState() {
+  if (stateRefreshing) return stateRefreshing;
+  stateRefreshing = buildStateData()
+    .then((data) => { stateCache = { at: Date.now(), data }; })
+    .catch(() => { /* 重建失败保留旧缓存 */ })
+    .finally(() => { stateRefreshing = null; });
+  return stateRefreshing;
+}
+
+/* 变更操作后调用：失效并后台重建（下一次 get_state 如未就绪仍会等待重建结果） */
+function invalidateState() {
+  stateCache = null;
+  refreshState();
+}
+
+async function getStateData() {
+  if (stateCache) {
+    if (Date.now() - stateCache.at >= STATE_TTL_MS) refreshState(); // 过期：先回旧值，后台刷新
+    return stateCache.data;
+  }
+  await refreshState();
+  if (stateCache) return stateCache.data;
+  throw new Error("state unavailable（CLI 调用失败，稍后重试）");
+}
+
+setTimeout(() => { refreshState(); }, 1200); // 启动预热：首个面板打开即命中缓存
+
 async function installedMap() {
-  const list = await cli.listInstalled(); // array
+  const st = await getStateData();
   const map = new Map();
-  for (const p of list || []) map.set(p.id, p);
+  for (const p of st.installed || []) map.set(p.id, p);
   return map;
 }
 
@@ -219,6 +283,7 @@ tool({
       const out = await cli.install(ref);
       result = { ok: true, id: ref, message: out.split("\n").slice(-1)[0] || "installed" };
     }
+    invalidateState();
     return { text: JSON.stringify(result), structured: result };
   },
 });
@@ -230,8 +295,8 @@ tool({
   visibility: ["model", "app"],
   readOnly: true,
   handler: async () => {
-    const list = await cli.listInstalled();
-    const simple = (list || []).map((p) => ({ id: p.id, name: p.name, version: p.version, marketplace: p.marketplace, enabled: p.enabled }));
+    const st = await getStateData(); // 走缓存；变更操作已失效重建
+    const simple = (st.installed || []).map((p) => ({ id: p.id, name: p.name, version: p.version, marketplace: p.marketplace, enabled: p.enabled }));
     return { text: JSON.stringify(simple, null, 1), structured: { installed: simple } };
   },
 });
@@ -240,41 +305,37 @@ tool({
 
 tool({
   name: "get_state",
-  description: "Panel bootstrap: catalog + installed list + marketplaces in one call.",
+  description: "Panel bootstrap: catalog + installed list in one call (cached; mutations invalidate).",
   inputSchema: { type: "object", properties: {} },
   visibility: ["app"],
   readOnly: true,
   handler: async () => {
-    const [overview, mkts] = await Promise.all([cli.listOverview().catch(() => null), cli.marketplaceList().catch(() => null)]);
-    const installed = overview?.installed || [];
-    const available = overview?.available || [];
-    const availById = new Map(available.map((a) => [a.id, a]));
-    const cat = catalogWithState();
-    const plugins = cat.plugins.map((p) => {
-      const ip = installed.find((i) => i.name === p.name);
-      const ap = ip ? availById.get(ip.id) : null;
-      return {
-        ...p,
-        installedId: ip?.id || null,
-        installedVersion: ip?.version ?? null,
-        enabled: ip?.enabled ?? null,
-        marketVersion: ap?.version ?? null,
-        updateAvailable: !!(ip && ap?.version && ip?.version && ap.version !== ip.version),
-      };
-    });
-    return {
-      text: "ok",
-      structured: {
-        selfVersion: PLUGIN_VERSION,
-        catalogUpdatedAt: cat.updatedAt,
-        plugins,
-        installed: installed.map((i) => ({
-          id: i.id, name: i.name, version: i.version ?? null, marketplace: i.marketplace,
-          enabled: i.enabled, description: availById.get(i.id)?.description ?? "",
-        })),
-        marketplaces: (Array.isArray(mkts) ? mkts : mkts?.marketplaces || []).map((m) => ({ id: m.id ?? m.name, name: m.name, source: m.source?.repo || m.source?.url || m.source?.path || "" })),
-      },
-    };
+    const data = await getStateData();
+    return { text: "ok", structured: data };
+  },
+});
+
+tool({
+  name: "list_marketplaces",
+  description: "List configured plugin marketplaces (id + source). Panel About tab.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["app"],
+  readOnly: true,
+  handler: async () => {
+    const mapSource = (s) => (s && (s.repo || s.url || s.path)) || "";
+    let list = null;
+    try {
+      // FS 快路径：known_marketplaces.json（宿主 CLI 存的市场注册表），读不到回退 CLI
+      const kmPath = path.join(path.dirname(path.dirname(dataDir())), "known_marketplaces.json");
+      const km = JSON.parse(fs.readFileSync(kmPath, "utf8"));
+      list = (km?.marketplaces || []).map((m) => ({ id: m.id ?? m.name, name: m.name, source: mapSource(m.source) }));
+    } catch { /* fall through */ }
+    if (!list) {
+      const mkts = await cli.marketplaceList().catch(() => null);
+      const raw = Array.isArray(mkts) ? mkts : mkts?.marketplaces || [];
+      list = raw.map((m) => ({ id: m.id ?? m.name, name: m.name, source: mapSource(m.source) }));
+    }
+    return { text: "ok", structured: { marketplaces: list } };
   },
 });
 
@@ -289,6 +350,7 @@ tool({
     const entry = cat.plugins.find((p) => p.repo?.toLowerCase() === String(args.repo).toLowerCase());
     if (!entry) throw new Error(`repo not in catalog: ${args.repo}`);
     const r = await installEntry(entry);
+    invalidateState();
     return { text: JSON.stringify(r), structured: r };
   },
 });
@@ -301,6 +363,7 @@ tool({
   readOnly: false,
   handler: async (args) => {
     const out = await cli.uninstall(String(args.id), { keepData: !!args.keepData });
+    invalidateState();
     const cleanup = pluginCacheCleanup(String(args.id));
     const msg = out.split("\n").slice(-1)[0] || "uninstalled";
     return {
@@ -321,6 +384,7 @@ tool({
     const mkt = id.includes("@") ? id.split("@").slice(1).join("@") : "";
     if (mkt) await cli.marketplaceUpdate(mkt).catch(() => {});
     const out = await cli.update(id);
+    invalidateState();
     // 更新完成后清走旧版本目录：仅当已装清单已指向该插件且 installPath 存在时才清（防 CLI 收尾未完成时误删新版）
     let cleanup = { removed: [] };
     try {
@@ -347,6 +411,7 @@ tool({
   readOnly: false,
   handler: async (args) => {
     const out = await (args.enable ? cli.enable(String(args.id)) : cli.disable(String(args.id)));
+    invalidateState();
     return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "done" } };
   },
 });
@@ -360,6 +425,7 @@ tool({
   handler: async () => {
     const repos = await fetchGithub([], { token: githubToken() });
     const cache = refreshCache(bundledIndex, repos);
+    invalidateState(); // 目录变了：合并状态里的 updateAvailable 等需重建
     return { text: `refreshed ${cache.plugins.length} plugins`, structured: { ok: true, count: cache.plugins.length, updatedAt: cache.updatedAt } };
   },
 });
@@ -490,6 +556,24 @@ tool({
   visibility: ["model", "app"],
   readOnly: true,
   handler: async (args) => { const r = settings.get(args.pluginId); return { text: JSON.stringify(r), structured: r }; },
+});
+
+tool({
+  name: "settings_export",
+  description: "All registered settings in one call: [{ pluginId, title, description, schema, values }]. Panel Settings tab renders from this single response.",
+  inputSchema: { type: "object", properties: {} },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: () => {
+    const out = [];
+    for (const s of settings.list()) {
+      try {
+        const d = settings.get(s.pluginId);
+        out.push({ pluginId: s.pluginId, title: s.title, description: s.description, schema: d.schema, values: d.values });
+      } catch { /* 单个损坏不拖垮整页 */ }
+    }
+    return { text: "ok", structured: { settings: out } };
+  },
 });
 
 tool({

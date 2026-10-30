@@ -134,9 +134,12 @@ function toast(msg, ms) {
 const CATS = { all: "全部", monitoring: "监控", appearance: "外观", productivity: "效率", "dev-tools": "开发", agent: "编排", other: "其它" };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-let state = { plugins: [], installed: [], marketplaces: [], catalogUpdatedAt: null };
+let state = { plugins: [], installed: [], catalogUpdatedAt: null };
 let tab = "explore";
 let query = "", catFilter = "all";
+let loadedOnce = false;     // 首次 get_state 是否完成（未完成前各页签只出骨架，避免误渲染“空列表”）
+let stateLoading = false;   // 防止并发 get_state
+let renderSeq = 0;          // 异步渲染竞态守卫：切页签/重渲染后，旧异步结果不得覆盖新内容
 const SELF_ID = "zcode-community-market@zcode-community-market";
 const SELF_SCHEMA = {
   title: "社区插件市场",
@@ -161,8 +164,9 @@ function renderLoadError(err) {
     <button id="retry-load">重试</button></div>`;
   $("#retry-load").addEventListener("click", () => loadState());
 }
-let loadedOnce = false;
 async function loadState() {
+  if (stateLoading) return; // 已在加载：完成后统一 render() 即可
+  stateLoading = true;
   busy(1);
   if (!loadedOnce) renderSkeleton();
   try {
@@ -173,12 +177,14 @@ async function loadState() {
     if (loadedOnce) toast("刷新失败: " + e.message, 5000);
     else renderLoadError(e);
   }
+  stateLoading = false;
   busy(0);
 }
 
 /* ================= 各标签页 ================= */
 
 function renderExplore() {
+  if (!loadedOnce) { renderSkeleton(); return; } // 初始加载期间：骨架而非空列表
   const updatableCount = state.plugins.filter((p) => p.updateAvailable).length;
   const hits = state.plugins.filter((p) => {
     if (catFilter === "__upd" && !p.updateAvailable) return false;
@@ -265,6 +271,7 @@ function changelogHtml(data) {
 }
 
 function renderInstalled() {
+  if (!loadedOnce) { renderSkeleton(); return; } // 关键：get_state 未回来前不渲染“还没有已安装的插件”（误报空）
   if (!state.installed.length) { main.innerHTML = '<div class="empty">还没有已安装的插件</div>'; return; }
   main.innerHTML =
     `<div class="note" style="margin-bottom:10px">共 ${state.installed.length} 个 · 启用/禁用与安装/卸载的能力变更从<b>新会话</b>开始生效。</div>` +
@@ -316,7 +323,13 @@ function renderInstalled() {
   main.querySelectorAll("[data-uninstall]").forEach((b) =>
     b.addEventListener("click", async () => {
       const id = b.dataset.uninstall;
-      if (!confirm(`卸载 ${id}？（插件数据默认一并删除）`)) return;
+      // iframe 里 window.confirm 在 Electron 下恒返回 false（点了没反应）→ 两步内联确认
+      if (b.dataset.armed !== "1") {
+        b.dataset.armed = "1";
+        b.textContent = "确认卸载？";
+        setTimeout(() => { if (b.isConnected && b.dataset.armed === "1") { b.dataset.armed = ""; b.textContent = "卸载"; } }, 5000);
+        return;
+      }
       const msg = b.closest(".card").querySelector(".opmsg");
       b.disabled = true; msg.textContent = "卸载中…"; busy(1);
       try {
@@ -324,7 +337,7 @@ function renderInstalled() {
         msg.textContent = "✅ 已卸载" + (r.cacheRemoved?.length ? `（清理旧版本缓存：${r.cacheRemoved.join(", ")}）` : "");
         toast("已卸载（新会话生效）"); await loadState();
       }
-      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); b.disabled = false; }
+      catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); b.disabled = false; b.textContent = "卸载"; b.dataset.armed = ""; }
       busy(0);
     })
   );
@@ -344,15 +357,20 @@ function renderInstalled() {
   );
 }
 
+/* 设置中心：settings_export 一次拿全部（旧版逐插件 settings_get 串行 N 次、每次还要过轮询桥，页签久转圈像打不开） */
+const hubSchemas = new Map(); // pluginId → schema（保存时免二次 RPC）
 async function renderHub() {
+  const seq = ++renderSeq;
   main.innerHTML = '<div class="empty"><span class="spin"></span> 加载设置中心…</div>';
   let list;
-  try { list = (await transport.callTool("settings_list")).settings || []; }
+  try { list = (await transport.callTool("settings_export")).settings || []; }
   catch (e) {
+    if (seq !== renderSeq) return; // 已切到别的页签，丢弃
     main.innerHTML = `<div class="card errcard"><b>设置中心加载失败</b><div class="msg">${esc(String(e?.message || e)).slice(0, 300)}</div><button id="retry-hub">重试</button></div>`;
     $("#retry-hub").addEventListener("click", () => renderHub());
     return;
   }
+  if (seq !== renderSeq) return;
   if (!list.length) {
     main.innerHTML = `<div class="empty">还没有插件注册设置。</div>
     <div class="note" style="max-width:520px;margin:0 auto;line-height:1.7">
@@ -363,11 +381,9 @@ async function renderHub() {
   }
   const blocks = [];
   for (const s of list) {
-    let detail;
-    try { detail = await transport.callTool("settings_get", { pluginId: s.pluginId }); }
-    catch { continue; }
-    const rows = Object.entries(detail.schema.properties || {}).map(([k, prop]) => {
-      const v = detail.values?.[k] ?? prop.default ?? "";
+    hubSchemas.set(s.pluginId, s.schema);
+    const rows = Object.entries(s.schema?.properties || {}).map(([k, prop]) => {
+      const v = s.values?.[k] ?? prop.default ?? "";
       const hint = prop.description ? `<div class="hint">${esc(prop.description)}</div>` : "";
       let input;
       if (prop.enum) input = `<select data-k="${esc(k)}">${prop.enum.map((o) => `<option value="${esc(o)}" ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
@@ -389,12 +405,15 @@ async function renderHub() {
     b.addEventListener("click", async () => {
       const pid = b.dataset.save;
       const card = b.closest(".card");
-      const detail = await transport.callTool("settings_get", { pluginId: pid }).catch(() => null);
-      if (!detail) return;
+      let props = hubSchemas.get(pid)?.properties;
+      if (!props) { // 兜底：缓存缺失时单拉一次
+        try { props = (await transport.callTool("settings_get", { pluginId: pid })).schema?.properties || {}; }
+        catch { props = {}; }
+      }
       const values = {};
       card.querySelectorAll("[data-k]").forEach((el) => {
         const k = el.dataset.k;
-        const prop = detail.schema.properties[k] || {};
+        const prop = props[k] || {};
         values[k] = prop.type === "number" ? Number(el.value) : prop.type === "boolean" ? el.checked : el.value;
       });
       const msg = card.querySelector(".opmsg");
@@ -406,12 +425,11 @@ async function renderHub() {
   );
 }
 
+/* 关于：先渲染（版本/统计即时可见），补丁状态、Token、市场源异步填充——
+ * 旧版先 await patch_status（Python 冷启动）再渲染，期间画面纹丝不动，页签像没点上 */
 async function renderAbout() {
-  let patch;
-  try { patch = await transport.callTool("patch_status"); } catch { patch = { installed: false }; }
-  let ghToken = "";
-  try { ghToken = (await transport.callTool("settings_get", { pluginId: SELF_ID })).values?.githubToken ?? ""; }
-  catch { try { await transport.callTool("settings_register", { pluginId: SELF_ID, schema: SELF_SCHEMA }); } catch { /* 稍后保存时报错 */ } }
+  const seq = ++renderSeq;
+  const alive = () => seq === renderSeq && tab === "about";
   main.innerHTML = `
   <div class="card">
     <div class="row1"><span class="name">社区插件市场</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">v${esc(state.selfVersion || "…")}</span></div>
@@ -426,29 +444,23 @@ async function renderAbout() {
     <div class="row1"><span class="name">GitHub Token</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">可选</span></div>
     <div class="desc">匿名 GitHub API 限速（403/429）时填写 personal access token（无需勾选任何 scope），用于目录刷新与更新日志拉取。仅保存在本机设置中心。</div>
     <div class="btnrow" style="align-items:center;margin-top:6px">
-      <input type="password" id="gh-token" placeholder="github_pat_… / ghp_…" value="${esc(ghToken)}" style="flex:1;min-width:160px" autocomplete="off">
+      <input type="password" id="gh-token" placeholder="github_pat_… / ghp_…" value="" style="flex:1;min-width:160px" autocomplete="off">
       <button id="gh-token-save">保存</button>
       <span class="opmsg2" style="color:var(--muted)"></span>
     </div>
   </div>
   <div class="card">
-    <div class="row1"><span class="name">设置页入口</span>${
-      patch.installed ? '<span class="badge installed">已注入</span>' : '<span class="badge" style="color:var(--muted);border:1px solid var(--border)">未注入</span>'
-    }${patch.pendingTmp ? '<span class="badge update">待收尾(完全退出ZCode后生效)</span>' : ""}</div>
+    <div class="row1"><span class="name">设置页入口</span><span class="badge" id="patch-badge" style="color:var(--muted);border:1px solid var(--border)">检查中…</span><span id="patch-pending"></span></div>
     <div class="desc">把「社区插件市场」导航项注入 ZCode 设置页侧栏（修改客户端 app.asar，追加一行动态 import；与其它补丁插件互不干扰，ZCode 升级后由会话钩子自动重补）。安装/卸载后需<b>完全退出 ZCode 再重新打开</b>。</div>
-    <div class="btnrow">
-      ${patch.installed
-        ? `<button class="danger" id="patch-remove">卸载设置页入口</button>`
-        : `<button id="patch-install">注入设置页入口</button>`}
-      <span class="opmsg" style="color:var(--muted)"></span>
-    </div>
+    <div class="btnrow" id="patch-btns"><span class="opmsg" style="color:var(--muted)"></span></div>
   </div>
   <div class="card">
     <div class="row1"><span class="name">插件市场源</span></div>
-    ${state.marketplaces.map((m) => `<div class="kv"><span class="k mono">${esc(m.id || m.name)}</span><span class="mono" style="font-size:11.5px">${esc(m.source)}</span></div>`).join("") || '<div class="note">无</div>'}
+    <div id="mkt-rows"><span class="spin"></span> 读取中…</div>
   </div>`;
-  const msg = main.querySelector(".opmsg");
   const tokMsg = main.querySelector(".opmsg2");
+  const tokInput = document.getElementById("gh-token");
+  if (tokInput) tokInput.addEventListener("input", () => { tokInput.dataset.touched = "1"; });
   const tokBtn = document.getElementById("gh-token-save");
   if (tokBtn) tokBtn.addEventListener("click", async () => {
     const val = document.getElementById("gh-token").value.trim();
@@ -465,21 +477,68 @@ async function renderAbout() {
     } catch (e) { tokMsg.textContent = "❌ " + e.message.slice(0, 120); }
     tokBtn.disabled = false; busy(0);
   });
-  const bind = (id, toolName, doneMsg) => {
+  const bindPatchBtn = (id, toolName, doneMsg) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("click", async () => {
-      el.disabled = true; msg.textContent = "执行中（重打包约需十几秒）…"; busy(1);
+      const statusEl = el.parentElement ? el.parentElement.querySelector(".opmsg") : null; // 按钮行可能已被重渲染，用前重查
+      const setMsg = (t) => { if (statusEl) statusEl.textContent = t; };
+      el.disabled = true; setMsg("执行中（重打包约需十几秒）…"); busy(1);
       try {
         const r = await transport.callTool(toolName);
-        msg.textContent = (r.output || "").split("\n").slice(-2).join(" ").slice(0, 160);
-        toast(doneMsg); renderAbout();
-      } catch (e) { msg.textContent = "❌ " + e.message.slice(0, 140); el.disabled = false; }
+        setMsg((r.output || "").split("\n").slice(-2).join(" ").slice(0, 160));
+        toast(doneMsg);
+        if (alive()) { const b = document.getElementById("patch-badge"); if (b) b.textContent = "检查中…"; fillPatch(); }
+      } catch (e) { setMsg("❌ " + e.message.slice(0, 140)); el.disabled = false; }
       busy(0);
     });
   };
-  bind("patch-install", "patch_install", "已提交注入，完全退出 ZCode 后自动收尾，重开生效");
-  bind("patch-remove", "patch_remove", "已提交卸载，完全退出 ZCode 后重开生效");
+  function fillPatch() {
+    transport.callTool("patch_status").then((patch) => {
+      if (!alive()) return;
+      const badge = document.getElementById("patch-badge");
+      if (badge) {
+        badge.textContent = patch.installed ? "已注入" : "未注入";
+        badge.className = "badge" + (patch.installed ? " installed" : "");
+        badge.style.cssText = patch.installed ? "" : "color:var(--muted);border:1px solid var(--border)";
+      }
+      const pend = document.getElementById("patch-pending");
+      if (pend) pend.innerHTML = patch.pendingTmp ? '<span class="badge update">待收尾(完全退出ZCode后生效)</span>' : "";
+      const btns = document.getElementById("patch-btns");
+      if (btns) {
+        btns.innerHTML =
+          (patch.installed
+            ? `<button class="danger" id="patch-remove">卸载设置页入口</button>`
+            : `<button id="patch-install">注入设置页入口</button>`) + '<span class="opmsg" style="color:var(--muted)"></span>';
+        bindPatchBtn("patch-install", "patch_install", "已提交注入，完全退出 ZCode 后自动收尾，重开生效");
+        bindPatchBtn("patch-remove", "patch_remove", "已提交卸载，完全退出 ZCode 后重开生效");
+      }
+    }).catch(() => {
+      if (!alive()) return;
+      const badge = document.getElementById("patch-badge");
+      if (badge) badge.textContent = "状态未知";
+    });
+  }
+  fillPatch();
+  // Token 值异步填充（用户已输入则不打扰）
+  transport.callTool("settings_get", { pluginId: SELF_ID }).then((d) => {
+    if (!alive()) return;
+    const el = document.getElementById("gh-token");
+    if (el && !el.dataset.touched) el.value = d?.values?.githubToken ?? "";
+  }).catch(() => {
+    transport.callTool("settings_register", { pluginId: SELF_ID, schema: SELF_SCHEMA }).catch(() => {});
+  });
+  // 市场源异步填充（服务端 FS 快路径）
+  transport.callTool("list_marketplaces").then((r) => {
+    if (!alive()) return;
+    const el = document.getElementById("mkt-rows");
+    if (!el) return;
+    const ms = r.marketplaces || [];
+    el.innerHTML = ms.map((m) => `<div class="kv"><span class="k mono">${esc(m.id || m.name)}</span><span class="mono" style="font-size:11.5px">${esc(m.source)}</span></div>`).join("") || '<div class="note">无</div>';
+  }).catch(() => {
+    const el = document.getElementById("mkt-rows");
+    if (el && alive()) el.textContent = "（读取失败）";
+  });
 }
 
 function render() {

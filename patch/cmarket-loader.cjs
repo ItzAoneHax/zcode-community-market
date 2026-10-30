@@ -30,7 +30,7 @@ async function loadCore() {
 loadCore();
 setInterval(() => { loadCore(); }, 5000); // mtime 变化 → 新 URL → 全新模块图
 
-const SERVER_INFO = { name: "community-market", version: "0.3.3" };
+const SERVER_INFO = { name: "community-market", version: "0.4.0" };
 
 async function dispatch(method, params) {
   if (method === "initialize")
@@ -64,21 +64,41 @@ function injectInto(wc) {
   ).then(() => {}, (e) => log("inject failed:", e.message));
 }
 
+/* 轮询自适应：空闲 1s 一拍；发现请求后 8s 内提速到 200ms 一拍。
+ * 面板串行 RPC（如设置中心逐项拉取）旧版每请求固定吃 1s 轮询延迟。 */
+let pollFastUntil = 0;
+let pollBusy = false;
 function pollRequests() {
   const { app, BrowserWindow } = require("electron");
+  const jobs = [];
   for (const win of BrowserWindow.getAllWindows()) {
     const wc = win.webContents;
     if (!isHostPage(wc)) continue;
-    wc.executeJavaScript(
+    jobs.push(wc.executeJavaScript(
       `(function(){ var q = window.__cmarketRequests; if (!q || !q.length) return null;
-        return JSON.stringify(q.splice(0, 8)); })()`
+        return JSON.stringify(q.splice(0, 16)); })()`
     ).then((raw) => {
-      if (!raw) return;
+      if (!raw) return false;
       let reqs;
-      try { reqs = JSON.parse(raw); } catch (e) { return; }
+      try { reqs = JSON.parse(raw); } catch (e) { return false; }
       for (const req of reqs || []) handleRequest(wc, req);
-    }, () => {});
+      return true;
+    }, () => false));
   }
+  return Promise.all(jobs).then((rs) => rs.some(Boolean));
+}
+
+function schedulePoll() {
+  const delay = Date.now() < pollFastUntil ? 200 : 1000;
+  setTimeout(async () => {
+    if (pollBusy) return schedulePoll(); // 上一拍 executeJavaScript 未归，跳过本拍避免堆积
+    pollBusy = true;
+    let had = false;
+    try { had = await pollRequests(); } catch (e) { /* ignore */ }
+    pollBusy = false;
+    if (had) pollFastUntil = Date.now() + 8000;
+    schedulePoll();
+  }, delay);
 }
 
 function handleRequest(wc, req) {
@@ -99,15 +119,15 @@ try {
     wc.on("dom-ready", () => injectInto(wc));
     wc.on("did-finish-load", () => injectInto(wc));
   });
-  // mtime 热重载：settings-nav.js 变化后新页面注入新版本
+  // mtime 热重载：settings-nav.js 变化后新页面注入新版本（5s 一查，与轮询解耦）
   let lastMtime = 0;
   setInterval(() => {
     try {
       const m = fs.statSync(path.join(RUNTIME, "settings-nav.js")).mtimeMs;
       if (m !== lastMtime) { lastMtime = m; navSrc = fs.readFileSync(path.join(RUNTIME, "settings-nav.js"), "utf8"); }
     } catch (e) { /* ignore */ }
-    pollRequests();
-  }, 1000);
+  }, 5000);
+  schedulePoll();
   log("loader up at", RUNTIME);
 } catch (e) {
   log("loader init failed (not in electron main?):", e.message);

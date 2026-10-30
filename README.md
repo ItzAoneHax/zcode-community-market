@@ -65,7 +65,7 @@ ZCode 桌面客户端的**社区插件市场**：在侧栏面板里浏览、搜�
 | `search_plugins` | 搜索社区插件目录 |
 | `install_plugin` | 按 `owner/name` 仓库或 `name@marketplace` 引用安装 |
 | `list_installed` | 列出已装插件及启停状态 |
-| `settings_register` / `settings_get` / `settings_set` / `settings_list` | 共享设置中心读写 |
+| `settings_register` / `settings_get` / `settings_set` / `settings_list` / `settings_export` | 共享设置中心读写（`settings_export` 一次返回全部，面板设置页单次加载） |
 | `patch_install` / `patch_remove` / `patch_status` | 设置页入口注入管理 |
 
 ---
@@ -116,6 +116,8 @@ zcode plugins update zcode-community-market@zcode-community-market
 - 或直接说「打开社区插件市场」
 
 AI 会调用 `open_market` 在侧栏打开面板，之后浏览、安装、更新、启停、卸载、改设置都在面板里点按完成。
+
+> v0.4.0 起面板数据走服务端缓存（stale-while-revalidate，变更操作自动失效重建）：打开面板与各页签切换即时响应；「设置中心」单次批量拉取，「关于」先渲染后异步填充补丁状态 / Token / 市场源。
 
 > 插件的能力（技能 / 命令 / MCP 工具）在**新会话**开始生效；安装完提示「新会话生效」是正常的。
 

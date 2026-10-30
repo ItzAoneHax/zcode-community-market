@@ -30,7 +30,7 @@ async function loadCore() {
 loadCore();
 setInterval(() => { loadCore(); }, 5000); // mtime 变化 → 新 URL → 全新模块图
 
-const SERVER_INFO = { name: "community-market", version: "0.3.1" };
+const SERVER_INFO = { name: "community-market", version: "0.3.2" };
 
 async function dispatch(method, params) {
   if (method === "initialize")

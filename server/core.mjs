@@ -8,7 +8,7 @@ import { cli } from "./cli.mjs";
 import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog, dataDir } from "./catalog.mjs";
 import { settings } from "./settings.mjs";
 
-export const PLUGIN_VERSION = "0.3.1";
+export const PLUGIN_VERSION = "0.3.2";
 const SELF_ID = "zcode-community-market@zcode-community-market";
 export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);
@@ -112,6 +112,12 @@ async function installEntry(entry) {
   return { ok: true, id: target.id, message: out.split("\n").slice(-1)[0] || "installed" };
 }
 
+/* 已装清单条目：兼容 {"version","plugins":{...}} 嵌套与扁平两种结构 */
+function installedEntriesOf(j) {
+  const src = j && typeof j === "object" && j.plugins && typeof j.plugins === "object" ? j.plugins : j;
+  return Object.values(src).filter((x) => x && typeof x === "object" && x.installPath);
+}
+
 /* 卸载后清残留：cache/<市场>/<插件>/ 下未被 installed_plugins.json 引用的版本目录。
  * 已装条目按 installPath 全路径比对（同插件换市场重装等场景不会误删在用目录）。 */
 function pluginCacheCleanup(id) {
@@ -120,7 +126,7 @@ function pluginCacheCleanup(id) {
     const inUse = new Set();
     try {
       const j = JSON.parse(fs.readFileSync(path.join(pluginsRoot, "installed_plugins.json"), "utf8"));
-      for (const x of Object.values(j)) if (x && typeof x === "object" && x.installPath) inUse.add(String(x.installPath).toLowerCase());
+      for (const x of installedEntriesOf(j)) inUse.add(String(x.installPath).toLowerCase());
     } catch { /* 清单读不到就不做清理 */ }
     const cacheRoot = path.join(pluginsRoot, "cache");
     const at = id.lastIndexOf("@");
@@ -315,10 +321,17 @@ tool({
     const mkt = id.includes("@") ? id.split("@").slice(1).join("@") : "";
     if (mkt) await cli.marketplaceUpdate(mkt).catch(() => {});
     const out = await cli.update(id);
-    // 更新完成后清走旧版本目录（对照已装清单，只删未引用的）
-    const cleanup = pluginCacheCleanup(id);
+    // 更新完成后清走旧版本目录：仅当已装清单已指向该插件且 installPath 存在时才清（防 CLI 收尾未完成时误删新版）
+    let cleanup = { removed: [] };
+    try {
+      const pluginsRoot = path.dirname(path.dirname(dataDir()));
+      const j = JSON.parse(fs.readFileSync(path.join(pluginsRoot, "installed_plugins.json"), "utf8"));
+      const ent = installedEntriesOf(j).find((x) => (x.id || `${x.name}@${x.marketplace}`) === id);
+      if (ent && fs.existsSync(ent.installPath)) cleanup = pluginCacheCleanup(id);
+      else cleanup = { removed: [], skipped: "installed-manifest-not-ready" };
+    } catch { cleanup = { removed: [], skipped: "installed-manifest-unreadable" }; }
     const msg = (out.split("\n").slice(-1)[0] || "updated") + (cleanup.removed.length ? `（已清理旧版本缓存 ${cleanup.removed.join(", ")}）` : "");
-    return { text: out, structured: { ok: true, message: msg, cacheRemoved: cleanup.removed } };
+    return { text: out, structured: { ok: true, message: msg, cacheRemoved: cleanup.removed, ...(cleanup.skipped ? { cleanupSkipped: cleanup.skipped } : {}) } };
   },
 });
 

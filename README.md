@@ -1,6 +1,6 @@
 # zcode-community-market · 社区插件市场
 
-[![Version](https://img.shields.io/badge/version-0.3.1-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]() [![ZCode](https://img.shields.io/badge/for-ZCode%20Desktop-purple)]()
+[![Version](https://img.shields.io/badge/version-0.3.2-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]() [![ZCode](https://img.shields.io/badge/for-ZCode%20Desktop-purple)]()
 
 ZCode 桌面客户端的**社区插件市场**：在侧栏面板里浏览、搜索、安装、更新、启停、卸载社区插件；内置可供其他插件调用的**共享设置中心**；并提供可选的 **ZCode 设置页入口注入**（在设置页左栏「插件」下方加一项「社区插件市场」）。
 
@@ -207,6 +207,7 @@ AI 会调用 `open_market` 在侧栏打开面板，之后浏览、安装、更�
 
 ## 更新日志
 
+- **v0.3.2**（2026-10-30）：**重要修复**——缓存清理误读已装清单结构（条目嵌套于顶层 `plugins` 键），导致「更新后清理」会把刚装好的新版本一并删除；现严格按清单 `installPath` 保护在用目录，且更新后仅在清单已指向新版本时才执行清理。
 - **v0.3.1**（2026-10-30）：社区索引全量刷新（59 个插件，新增 44 个并逐个核实安装策略；6 个 `marketplace-try` 经实测升级为 `marketplace`，speed-panel 降级为手动安装）；更新插件后同样清理旧版本缓存；安装时不再覆盖同 id 的既有市场源（保护本地开发市场）；新增 `patch/check_anchors.py` 升级兼容自检脚本。
 - **v0.3.0**（2026-10-30）：探索页「↻ 可更新」过滤；已安装页更新日志（GitHub Releases / README 变更段）；卸载自动清理 `cache/` 旧版本残留；GitHub Token 面板内配置（「关于」页，设置中心存储，token 类字段自动遮蔽）；面板骨架屏与加载失败重试按钮。
 - **v0.2.1**（2026-10-29）：首个公开版本。市场面板（探索 / 已安装 / 设置中心 / 关于）、共享设置中心、设置页入口注入 + 会话钩子自愈。
@@ -250,6 +251,7 @@ The settings-page entry is an **optional** feature that modifies the ZCode clien
 
 ## Changelog
 
+- **v0.3.2** (2026-10-30): **critical fix** — cache cleanup misread the installed-manifest structure (entries nested under a top-level `plugins` key), so post-update cleanup could delete the freshly installed version; in-use dirs are now strictly protected by manifest `installPath`, and post-update cleanup only runs once the manifest points at the new version.
 - **v0.3.1** (2026-10-30): full community index refresh (59 plugins, 44 additions with per-repo install-strategy verification; 6 `marketplace-try` entries live-verified and upgraded to `marketplace`; speed-panel demoted to manual); cache cleanup also runs after updates; installs no longer overwrite an existing marketplace source with the same id; added `patch/check_anchors.py` for upgrade-compatibility self-checks.
 - **v0.3.0** (2026-10-30): "updatable" filter in Explore; release notes in Installed; uninstall now cleans stale version dirs under `cache/`; GitHub Token configurable in the panel (About tab, stored in the settings hub, token-like fields masked); skeleton loading state with a retry button.
 - **v0.2.1** (2026-10-29): initial public release.

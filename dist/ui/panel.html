@@ -63,6 +63,13 @@
   a { color: var(--accent); }
   .empty { color: var(--muted); text-align: center; padding: 30px 0; }
   .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+  .skel { height: 72px; position: relative; overflow: hidden; }
+  .skel::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(127,127,127,.16), transparent); animation: shimmer 1.2s infinite; }
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+  .errcard { text-align: center; padding: 30px 16px; }
+  .errcard .msg { color: var(--danger); margin: 10px 0 14px; line-height: 1.6; word-break: break-all; font-size: 12px; }
+  .chlog { margin-top: 8px; border-top: 1px dashed var(--border); padding-top: 8px; color: var(--muted); font-size: 12px; line-height: 1.55; max-height: 280px; overflow-y: auto; white-space: pre-wrap; }
+  .chlog b.rel { color: var(--fg); }
 </style>
 </head>
 <body>
@@ -130,6 +137,12 @@ const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<
 let state = { plugins: [], installed: [], marketplaces: [], catalogUpdatedAt: null };
 let tab = "explore";
 let query = "", catFilter = "all";
+const SELF_ID = "zcode-community-market@zcode-community-market";
+const SELF_SCHEMA = {
+  title: "社区插件市场",
+  description: "本插件自身设置（GitHub Token 仅存本机，用于目录刷新与更新日志拉取）",
+  properties: { githubToken: { type: "string", title: "GitHub Token", description: "可选。匿名 GitHub API 限速（403/429）时填写", default: "" } },
+};
 
 document.querySelectorAll(".tab").forEach((el) =>
   el.addEventListener("click", () => {
@@ -139,30 +152,48 @@ document.querySelectorAll(".tab").forEach((el) =>
   })
 );
 
+function renderSkeleton() {
+  main.innerHTML = Array.from({ length: 5 }, () => '<div class="card skel"></div>').join("");
+}
+function renderLoadError(err) {
+  main.innerHTML = `<div class="card errcard"><div style="font-size:26px">⚠️</div><b>加载失败</b>
+    <div class="msg">${esc(String(err?.message || err)).slice(0, 300)}</div>
+    <button id="retry-load">重试</button></div>`;
+  $("#retry-load").addEventListener("click", () => loadState());
+}
+let loadedOnce = false;
 async function loadState() {
   busy(1);
+  if (!loadedOnce) renderSkeleton();
   try {
     state = await transport.callTool("get_state");
+    loadedOnce = true;
     render();
-  } catch (e) { toast("加载失败: " + e.message, 5000); }
+  } catch (e) {
+    if (loadedOnce) toast("刷新失败: " + e.message, 5000);
+    else renderLoadError(e);
+  }
   busy(0);
 }
 
 /* ================= 各标签页 ================= */
 
 function renderExplore() {
+  const updatableCount = state.plugins.filter((p) => p.updateAvailable).length;
   const hits = state.plugins.filter((p) => {
-    if (catFilter !== "all" && (p.category || "other") !== catFilter) return false;
+    if (catFilter === "__upd" && !p.updateAvailable) return false;
+    if (catFilter !== "all" && catFilter !== "__upd" && (p.category || "other") !== catFilter) return false;
     if (!query) return true;
     return [p.name, p.displayName, p.description, p.repo].join(" ").toLowerCase().includes(query.toLowerCase());
   });
-  const chips = Object.entries(CATS).map(([k, v]) => `<span class="chip ${catFilter === k ? "active" : ""}" data-cat="${k}">${v}</span>`).join("");
+  const chips = Object.entries(CATS).map(([k, v]) => `<span class="chip ${catFilter === k ? "active" : ""}" data-cat="${k}">${v}</span>`).join("")
+    + (updatableCount ? `<span class="chip ${catFilter === "__upd" ? "active" : ""}" data-cat="__upd" style="color:var(--warn);border-color:var(--warn)">↻ 可更新 ${updatableCount}</span>` : "");
   main.innerHTML = `
     <div class="toolbar">
       <input type="text" id="q" placeholder="搜索名称 / 描述 / 仓库…" value="${esc(query)}">
       ${chips}
     </div>
-    ${hits.length ? hits.map(cardHtml).join("") : `<div class="empty">没有匹配的插件</div>`}
+    ${hits.length ? hits.map(cardHtml).join("") : `<div class="empty">${catFilter === "__upd" ? "没有待更新的插件 🎉" : "没有匹配的插件"}</div>`}
     <div class="note" style="margin-top:10px">索引更新于 ${state.catalogUpdatedAt ? new Date(state.catalogUpdatedAt).toLocaleString() : "内置版本（未刷新过）"} ·
       <a href="#" id="refresh-catalog">从 GitHub 刷新</a></div>`;
   $("#q").addEventListener("input", (e) => { query = e.target.value; renderExplore(); });
@@ -216,6 +247,23 @@ function bindCardActions() {
   );
 }
 
+/* 更新日志（已安装页）：按仓库缓存，避免重复拉取 */
+const changelogCache = new Map();
+async function fetchChangelog(repo) {
+  if (changelogCache.has(repo)) return changelogCache.get(repo);
+  let data;
+  try { data = await transport.callTool("get_changelog", { repo, limit: 5 }); }
+  catch (e) { data = { repo, source: "error", message: String(e?.message || e) }; }
+  changelogCache.set(repo, data);
+  return data;
+}
+function changelogHtml(data) {
+  if (data.source === "releases")
+    return data.releases.map((r) => `<b class="rel">${esc(r.tag || r.name)}</b> <span style="font-size:11px">${esc(r.date)}${r.prerelease ? " · 预发布" : ""}</span>\n${esc((r.body || "（无说明）").trim().slice(0, 500))}`).join("\n\n");
+  if (data.source === "readme") return esc(data.readmeExcerpt.trim());
+  return esc(data.message || "未找到更新日志");
+}
+
 function renderInstalled() {
   if (!state.installed.length) { main.innerHTML = '<div class="empty">还没有已安装的插件</div>'; return; }
   main.innerHTML =
@@ -224,6 +272,7 @@ function renderInstalled() {
       .map((p) => {
         const cat = state.plugins.find((x) => x.name === p.name && x.installedId === p.id);
         const upd = cat?.updateAvailable;
+        const repo = cat?.repo;
         return `<div class="card">
         <div class="row1">
           <span class="name">${esc(p.name)}</span>
@@ -236,10 +285,12 @@ function renderInstalled() {
           <label class="switch"><input type="checkbox" data-toggle="${esc(p.id)}" ${p.enabled ? "checked" : ""}><i></i></label>
           <span style="color:var(--muted);font-size:12px">${p.enabled ? "已启用" : "已禁用"}</span>
           <span style="flex:1"></span>
+          ${repo ? `<button class="ghost" data-changelog="${esc(repo)}">日志</button>` : ""}
           ${upd ? `<button data-update="${esc(p.id)}">更新</button>` : ""}
           <button class="danger" data-uninstall="${esc(p.id)}">卸载</button>
         </div>
         <div class="opmsg" style="color:var(--muted);margin-top:6px"></div>
+        <div class="chlog" style="display:none"></div>
       </div>`;
       })
       .join("");
@@ -268,8 +319,26 @@ function renderInstalled() {
       if (!confirm(`卸载 ${id}？（插件数据默认一并删除）`)) return;
       const msg = b.closest(".card").querySelector(".opmsg");
       b.disabled = true; msg.textContent = "卸载中…"; busy(1);
-      try { await transport.callTool("do_uninstall", { id }); msg.textContent = "✅ 已卸载"; toast("已卸载（新会话生效）"); await loadState(); }
+      try {
+        const r = await transport.callTool("do_uninstall", { id });
+        msg.textContent = "✅ 已卸载" + (r.cacheRemoved?.length ? `（清理旧版本缓存：${r.cacheRemoved.join(", ")}）` : "");
+        toast("已卸载（新会话生效）"); await loadState();
+      }
       catch (e) { msg.textContent = "❌ " + e.message.slice(0, 120); b.disabled = false; }
+      busy(0);
+    })
+  );
+  main.querySelectorAll("[data-changelog]").forEach((b) =>
+    b.addEventListener("click", async () => {
+      const card = b.closest(".card");
+      const box = card.querySelector(".chlog");
+      if (box.style.display !== "none") { box.style.display = "none"; return; }
+      box.style.display = "block";
+      if (box.dataset.loaded) return;
+      box.textContent = "拉取更新日志…"; busy(1);
+      const data = await fetchChangelog(b.dataset.changelog);
+      box.innerHTML = changelogHtml(data);
+      box.dataset.loaded = "1";
       busy(0);
     })
   );
@@ -279,7 +348,11 @@ async function renderHub() {
   main.innerHTML = '<div class="empty"><span class="spin"></span> 加载设置中心…</div>';
   let list;
   try { list = (await transport.callTool("settings_list")).settings || []; }
-  catch (e) { main.innerHTML = `<div class="empty">加载失败: ${esc(e.message)}</div>`; return; }
+  catch (e) {
+    main.innerHTML = `<div class="card errcard"><b>设置中心加载失败</b><div class="msg">${esc(String(e?.message || e)).slice(0, 300)}</div><button id="retry-hub">重试</button></div>`;
+    $("#retry-hub").addEventListener("click", () => renderHub());
+    return;
+  }
   if (!list.length) {
     main.innerHTML = `<div class="empty">还没有插件注册设置。</div>
     <div class="note" style="max-width:520px;margin:0 auto;line-height:1.7">
@@ -300,6 +373,7 @@ async function renderHub() {
       if (prop.enum) input = `<select data-k="${esc(k)}">${prop.enum.map((o) => `<option value="${esc(o)}" ${o === v ? "selected" : ""}>${esc(o)}</option>`).join("")}</select>`;
       else if (prop.type === "boolean") input = `<label class="switch"><input type="checkbox" data-k="${esc(k)}" ${v ? "checked" : ""}><i></i></label>`;
       else if (prop.type === "number") input = `<input type="number" data-k="${esc(k)}" value="${esc(v)}" style="width:140px">`;
+      else if (/token|secret|password|apikey|api[_-]?key/i.test(k)) input = `<input type="password" autocomplete="off" data-k="${esc(k)}" value="${esc(v)}" style="width:100%">`;
       else input = `<input type="text" data-k="${esc(k)}" value="${esc(v)}" style="width:100%">`;
       return `<div class="form-row"><div class="k">${esc(prop.title || k)}</div><div>${input}</div>${hint}</div>`;
     }).join("");
@@ -335,14 +409,26 @@ async function renderHub() {
 async function renderAbout() {
   let patch;
   try { patch = await transport.callTool("patch_status"); } catch { patch = { installed: false }; }
+  let ghToken = "";
+  try { ghToken = (await transport.callTool("settings_get", { pluginId: SELF_ID })).values?.githubToken ?? ""; }
+  catch { try { await transport.callTool("settings_register", { pluginId: SELF_ID, schema: SELF_SCHEMA }); } catch { /* 稍后保存时报错 */ } }
   main.innerHTML = `
   <div class="card">
-    <div class="row1"><span class="name">社区插件市场</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">v0.2.0</span></div>
+    <div class="row1"><span class="name">社区插件市场</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">v${esc(state.selfVersion || "…")}</span></div>
     <div class="desc">探索、安装、更新与管理 ZCode 社区插件；提供插件共享设置中心。</div>
     <div class="kv">
       <span class="k">索引更新于</span><span>${state.catalogUpdatedAt ? new Date(state.catalogUpdatedAt).toLocaleString() : "内置版本"}</span>
       <span class="k">收录插件</span><span>${state.plugins.length} 个</span>
       <span class="k">已安装插件</span><span>${state.installed.length} 个</span>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row1"><span class="name">GitHub Token</span><span class="badge" style="color:var(--muted);border:1px solid var(--border)">可选</span></div>
+    <div class="desc">匿名 GitHub API 限速（403/429）时填写 personal access token（无需勾选任何 scope），用于目录刷新与更新日志拉取。仅保存在本机设置中心。</div>
+    <div class="btnrow" style="align-items:center;margin-top:6px">
+      <input type="password" id="gh-token" placeholder="github_pat_… / ghp_…" value="${esc(ghToken)}" style="flex:1;min-width:160px" autocomplete="off">
+      <button id="gh-token-save">保存</button>
+      <span class="opmsg2" style="color:var(--muted)"></span>
     </div>
   </div>
   <div class="card">
@@ -362,6 +448,23 @@ async function renderAbout() {
     ${state.marketplaces.map((m) => `<div class="kv"><span class="k mono">${esc(m.id || m.name)}</span><span class="mono" style="font-size:11.5px">${esc(m.source)}</span></div>`).join("") || '<div class="note">无</div>'}
   </div>`;
   const msg = main.querySelector(".opmsg");
+  const tokMsg = main.querySelector(".opmsg2");
+  const tokBtn = document.getElementById("gh-token-save");
+  if (tokBtn) tokBtn.addEventListener("click", async () => {
+    const val = document.getElementById("gh-token").value.trim();
+    tokBtn.disabled = true; busy(1);
+    try {
+      await transport.callTool("settings_set", { pluginId: SELF_ID, values: { githubToken: val } }).catch(async (e) => {
+        if (/no settings registered/.test(String(e?.message || e))) {
+          await transport.callTool("settings_register", { pluginId: SELF_ID, schema: SELF_SCHEMA });
+          return transport.callTool("settings_set", { pluginId: SELF_ID, values: { githubToken: val } });
+        }
+        throw e;
+      });
+      tokMsg.textContent = val ? "✅ 已保存" : "✅ 已清空";
+    } catch (e) { tokMsg.textContent = "❌ " + e.message.slice(0, 120); }
+    tokBtn.disabled = false; busy(0);
+  });
   const bind = (id, toolName, doneMsg) => {
     const el = document.getElementById(id);
     if (!el) return;

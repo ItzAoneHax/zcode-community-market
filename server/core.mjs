@@ -5,11 +5,35 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { cli } from "./cli.mjs";
-import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog } from "./catalog.mjs";
+import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog, dataDir } from "./catalog.mjs";
 import { settings } from "./settings.mjs";
 
+export const PLUGIN_VERSION = "0.3.0";
+const SELF_ID = "zcode-community-market@zcode-community-market";
 export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);
+
+/* ---------- 本插件自身设置（共享设置中心）：GitHub Token ---------- */
+let selfSettingsReady = false;
+function ensureSelfSettings() {
+  if (selfSettingsReady) return;
+  selfSettingsReady = true;
+  try {
+    settings.register(SELF_ID, {
+      title: "社区插件市场",
+      description: "本插件自身设置（GitHub Token 仅存本机，用于目录刷新与更新日志拉取）",
+      properties: {
+        githubToken: { type: "string", title: "GitHub Token", description: "可选。匿名 GitHub API 限速（403/429）时填写，避免刷新/日志拉取失败", default: "" },
+      },
+    });
+  } catch { /* 注册失败则仅用环境变量 */ }
+}
+/* 取 GitHub Token：设置中心优先，环境变量 GITHUB_TOKEN 兜底 */
+export function githubToken() {
+  ensureSelfSettings();
+  try { return settings.get(SELF_ID).values?.githubToken || process.env.GITHUB_TOKEN || null; } catch { return process.env.GITHUB_TOKEN || null; }
+}
+ensureSelfSettings(); // 服务启动即注册自身 schema（幂等），面板「关于」页保存不依赖调用时序
 
 /* ---------- 工具注册表 ---------- */
 const TOOLS = [];
@@ -75,6 +99,36 @@ async function installEntry(entry) {
   }
   const out = await cli.install(target.id);
   return { ok: true, id: target.id, message: out.split("\n").slice(-1)[0] || "installed" };
+}
+
+/* 卸载后清残留：cache/<市场>/<插件>/ 下未被 installed_plugins.json 引用的版本目录。
+ * 已装条目按 installPath 全路径比对（同插件换市场重装等场景不会误删在用目录）。 */
+function pluginCacheCleanup(id) {
+  try {
+    const pluginsRoot = path.dirname(path.dirname(dataDir())); // <plugins>/data/<self-id> → <plugins>
+    const inUse = new Set();
+    try {
+      const j = JSON.parse(fs.readFileSync(path.join(pluginsRoot, "installed_plugins.json"), "utf8"));
+      for (const x of Object.values(j)) if (x && typeof x === "object" && x.installPath) inUse.add(String(x.installPath).toLowerCase());
+    } catch { /* 清单读不到就不做清理 */ }
+    const cacheRoot = path.join(pluginsRoot, "cache");
+    const at = id.lastIndexOf("@");
+    const dirToClean = at > 0 ? path.join(cacheRoot, id.slice(at + 1), id.slice(0, at)) : path.join(cacheRoot, id);
+    if (!dirToClean.toLowerCase().startsWith(cacheRoot.toLowerCase() + path.sep)) return { removed: [] };
+    if (!fs.existsSync(dirToClean)) return { removed: [] };
+    const removed = [];
+    for (const ver of fs.readdirSync(dirToClean)) {
+      const vd = path.join(dirToClean, ver);
+      let st; try { st = fs.statSync(vd); } catch { continue; }
+      if (!st.isDirectory() || inUse.has(vd.toLowerCase())) continue;
+      try { fs.rmSync(vd, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 }); removed.push(ver); } catch { /* 被占用则留给下次 */ }
+    }
+    // 版本目录清空后顺手收掉空父目录（cache/<市场>/<插件> 与 cache/<市场>）
+    for (const d of [dirToClean, path.dirname(dirToClean)]) { try { fs.rmdirSync(d); } catch { /* 非空或不存在 */ } }
+    return { removed };
+  } catch (e) {
+    return { removed: [], error: String(e?.message || e) };
+  }
 }
 
 
@@ -194,6 +248,7 @@ tool({
     return {
       text: "ok",
       structured: {
+        selfVersion: PLUGIN_VERSION,
         catalogUpdatedAt: cat.updatedAt,
         plugins,
         installed: installed.map((i) => ({
@@ -229,7 +284,12 @@ tool({
   readOnly: false,
   handler: async (args) => {
     const out = await cli.uninstall(String(args.id), { keepData: !!args.keepData });
-    return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "uninstalled" } };
+    const cleanup = pluginCacheCleanup(String(args.id));
+    const msg = out.split("\n").slice(-1)[0] || "uninstalled";
+    return {
+      text: out,
+      structured: { ok: true, message: msg, cacheRemoved: cleanup.removed, ...(cleanup.error ? { cacheCleanupError: cleanup.error } : {}) },
+    };
   },
 });
 
@@ -266,14 +326,91 @@ tool({
 
 tool({
   name: "refresh_catalog",
-  description: "Refresh the community catalog from the GitHub zcode-plugin topic (manual action).",
+  description: "Refresh the community catalog from the GitHub zcode-plugin topic (manual action). Uses the GitHub Token configured in the panel if set.",
   inputSchema: { type: "object", properties: {} },
   visibility: ["app"],
   readOnly: false,
   handler: async () => {
-    const repos = await fetchGithub();
+    const repos = await fetchGithub([], { token: githubToken() });
     const cache = refreshCache(bundledIndex, repos);
     return { text: `refreshed ${cache.plugins.length} plugins`, structured: { ok: true, count: cache.plugins.length, updatedAt: cache.updatedAt } };
+  },
+});
+
+/* ---- 更新日志：GitHub Releases 优先，回退 README 变更段 ---- */
+const REPO_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
+const CHANGELOG_HEAD_RE = /^(更新日志|变更记录|变更历史|变更|changelog|release notes)$/i;
+function changelogSectionOf(md) {
+  const lines = md.split(/\r?\n/);
+  let start = -1, level = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^(#{1,3})\s+(.*)$/.exec(lines[i]);
+    if (m && CHANGELOG_HEAD_RE.test(m[2].trim())) { start = i; level = m[1].length; break; }
+  }
+  if (start < 0) return null;
+  const out = [lines[start]];
+  for (let i = start + 1; i < lines.length; i++) {
+    const m = /^(#{1,6})\s+/.exec(lines[i]);
+    if (m && m[1].length <= level) break;
+    out.push(lines[i]);
+  }
+  return out.join("\n");
+}
+
+tool({
+  name: "get_changelog",
+  description:
+    "Fetch a repo's release notes: latest GitHub releases (with body text), falling back to the changelog section of its README. " +
+    "Uses the panel-configured GitHub Token if set.",
+  inputSchema: {
+    type: "object",
+    properties: { repo: { type: "string", description: "owner/name (owner/repo)" }, limit: { type: "number", description: "Max releases to return, 1-10 (default 5)." } },
+    required: ["repo"],
+  },
+  visibility: ["model", "app"],
+  readOnly: true,
+  handler: async (args) => {
+    const repo = String(args?.repo || "").trim().replace(/^https?:\/\/github\.com\//i, "").replace(/\/+$/, "").replace(/\.git$/, "");
+    if (!REPO_RE.test(repo)) throw new Error(`invalid repo: ${repo}`);
+    const limit = Math.min(Math.max(Number(args?.limit) || 5, 1), 10);
+    /* Token 无效（401）时自动匿名重试，避免一次误配拖垮全部拉取 */
+    const ghApi = async (url, accept) => {
+      const token = githubToken();
+      const base = { "User-Agent": "zcode-community-market", Accept: accept || "application/vnd.github+json" };
+      let r = await fetch(url, { headers: token ? { ...base, Authorization: `Bearer ${token}` } : base });
+      if (r.status === 401 && token) r = await fetch(url, { headers: base });
+      return r;
+    };
+    try {
+      const r = await ghApi(`https://api.github.com/repos/${repo}/releases?per_page=${limit}`);
+      if (r.status === 403 || r.status === 429) throw new Error(`GitHub API ${r.status} 限速（可在面板「关于」页配置 GitHub Token 后重试）`);
+      if (r.ok) {
+        const rels = (await r.json()).filter((x) => x && !x.draft);
+        if (rels.length) {
+          return {
+            text: "ok",
+            structured: {
+              repo, source: "releases",
+              releases: rels.map((x) => ({
+                tag: x.tag_name || "", name: x.name || "", date: String(x.published_at || x.created_at || "").slice(0, 10),
+                prerelease: !!x.prerelease, body: String(x.body || "").slice(0, 3000),
+              })),
+            },
+          };
+        }
+      }
+    } catch (e) {
+      if (String(e?.message || e).includes("限速")) throw e;
+    }
+    // 回退：README 变更段（走 api.github.com：与目录刷新同一主机与鉴权，代理环境更稳）
+    try {
+      const r = await ghApi(`https://api.github.com/repos/${repo}/readme`, "application/vnd.github.raw");
+      if (r.ok) {
+        const sec = changelogSectionOf(await r.text());
+        if (sec) return { text: "ok", structured: { repo, source: "readme", readmeExcerpt: sec.slice(0, 3000) } };
+      }
+    } catch { /* 落到 none */ }
+    return { text: "ok", structured: { repo, source: "none", message: "该仓库没有 GitHub Releases，README 中也未找到更新日志段落" } };
   },
 });
 

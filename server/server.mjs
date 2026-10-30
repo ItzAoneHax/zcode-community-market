@@ -3,12 +3,12 @@
 "use strict";
 import fs from "node:fs";
 import path from "node:path";
-import { ALL_TOOLS as TOOLS, log } from "./core.mjs";
+import { ALL_TOOLS as TOOLS, PLUGIN_VERSION, log } from "./core.mjs";
 
 const PANEL_URI = "ui://community-market/panel.html";
 const HTML_MIME = "text/html;profile=mcp-app";
 const SERVER_NAME = "community-market";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = PLUGIN_VERSION;
 const PLUGIN_ROOT = path.dirname(import.meta.dirname);
 
 const RESOURCES = [

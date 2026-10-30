@@ -26,20 +26,21 @@ function saveCache(c) {
   fs.renameSync(tmp, CACHE_PATH());
 }
 
-/* GitHub topic 刷新（匿名 API，手动触发） */
-export async function fetchGithub(extraRepos = []) {
+/* GitHub topic 刷新（手动触发；token 优先取设置中心配置，环境变量 GITHUB_TOKEN 兜底） */
+export async function fetchGithub(extraRepos = [], { token } = {}) {
   const repos = [];
+  const bearer = token || process.env.GITHUB_TOKEN || null;
   const headers = {
     "User-Agent": "zcode-community-market",
     Accept: "application/vnd.github+json",
-    ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}),
+    ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
   };
   const urls = [
     "https://api.github.com/search/repositories?q=topic:zcode-plugin&sort=stars&order=desc&per_page=100",
   ];
   for (const url of urls) {
     const r = await fetch(url, { headers });
-    if (!r.ok) throw new Error(`GitHub API ${r.status}: ${r.statusText}（匿名限速时可设 GITHUB_TOKEN）`);
+    if (!r.ok) throw new Error(`GitHub API ${r.status}: ${r.statusText}（匿名限速时可在面板「关于」页配置 GitHub Token，或设环境变量 GITHUB_TOKEN）`);
     const j = await r.json();
     for (const it of j.items || []) repos.push(it);
   }

@@ -1,6 +1,6 @@
 # zcode-community-market · 社区插件市场
 
-[![Version](https://img.shields.io/badge/version-0.2.1-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]() [![ZCode](https://img.shields.io/badge/for-ZCode%20Desktop-purple)]()
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)]() [![License](https://img.shields.io/badge/license-MIT-green)]() [![ZCode](https://img.shields.io/badge/for-ZCode%20Desktop-purple)]()
 
 ZCode 桌面客户端的**社区插件市场**：在侧栏面板里浏览、搜索、安装、更新、启停、卸载社区插件；内置可供其他插件调用的**共享设置中心**；并提供可选的 **ZCode 设置页入口注入**（在设置页左栏「插件」下方加一项「社区插件市场」）。
 
@@ -29,6 +29,7 @@ ZCode 桌面客户端的**社区插件市场**：在侧栏面板里浏览、搜�
 
 - 内置精选索引（GitHub topic [`zcode-plugin`](https://github.com/topics/zcode-plugin) 人工筛选）+ 一键「从 GitHub 刷新」合并最新仓库
 - 关键词搜索（名称 / 描述 / 仓库）、按分类筛选（监控、外观、效率、开发、编排等）
+- 「↻ 可更新」过滤：只看已安装且有新版本的插件
 - 显示星标数、分类、安装状态；一键安装：自动走 `marketplace add` → `plugins install`（仓库自带市场的直接装；不带的先尝试按市场添加，失败则给出仓库链接提示手动安装）
 
 ![已安装页截图](docs/screenshot-installed.png)
@@ -38,6 +39,7 @@ ZCode 桌面客户端的**社区插件市场**：在侧栏面板里浏览、搜�
 
 - 已装插件列表：版本、启停开关（新会话生效）、卸载
 - 版本对比更新：市场上有新版本时显示「可更新」徽标，一键更新
+- 更新日志：点「日志」查看插件仓库的版本变更（GitHub Releases，无 Releases 时回退 README 的更新日志段落）
 
 ### ⚙️ 设置中心
 
@@ -189,7 +191,11 @@ AI 会调用 `open_market` 在侧栏打开面板，之后浏览、安装、更�
 
 **GitHub 刷新报限速（403/429）？**
 
-匿名 GitHub API 有速率限制；设置环境变量 `GITHUB_TOKEN` 后刷新会自动携带令牌。
+匿名 GitHub API 有速率限制；在市场面板「关于」标签页填写 **GitHub Token**（personal access token，无需勾选任何 scope，仅存本机），或设置环境变量 `GITHUB_TOKEN`。面板配置优先于环境变量。更新日志拉取同样受益。
+
+**装过的插件旧版本会残留吗？**
+
+不会。卸载插件时会对照已装清单（`installed_plugins.json`）清理 `cache/<市场>/<插件>/` 下的旧版本残留目录，只清未被引用的目录。
 
 ---
 
@@ -201,6 +207,7 @@ AI 会调用 `open_market` 在侧栏打开面板，之后浏览、安装、更�
 
 ## 更新日志
 
+- **v0.3.0**（2026-10-30）：探索页「↻ 可更新」过滤；已安装页更新日志（GitHub Releases / README 变更段）；卸载自动清理 `cache/` 旧版本残留；GitHub Token 面板内配置（「关于」页，设置中心存储，token 类字段自动遮蔽）；面板骨架屏与加载失败重试按钮。
 - **v0.2.1**（2026-10-29）：首个公开版本。市场面板（探索 / 已安装 / 设置中心 / 关于）、共享设置中心、设置页入口注入 + 会话钩子自愈。
 
 ---
@@ -211,8 +218,8 @@ AI 会调用 `open_market` 在侧栏打开面板，之后浏览、安装、更�
 
 ## Features
 
-- **Explore** — curated index (GitHub topic `zcode-plugin`) + one-click refresh from GitHub; keyword search, category filters, stars, one-click install (`marketplace add` → `plugins install`)
-- **Installed** — list with versions, enable/disable toggles (effective next session), uninstall, version-compare updates
+- **Explore** — curated index (GitHub topic `zcode-plugin`) + one-click refresh from GitHub; keyword search, category filters, an "updatable" filter, stars, one-click install (`marketplace add` → `plugins install`)
+- **Installed** — list with versions, enable/disable toggles (effective next session), uninstall, version-compare updates, release notes (GitHub Releases, falling back to the README changelog section)
 - **Settings Hub** — central form UI for settings registered by any plugin
 - **About** — version info, settings-page entry injection management, marketplace sources
 - **Model-side tools** — `open_market`, `search_plugins`, `install_plugin`, `list_installed`, `settings_*`, `patch_*`
@@ -242,4 +249,5 @@ The settings-page entry is an **optional** feature that modifies the ZCode clien
 
 ## Changelog
 
+- **v0.3.0** (2026-10-30): "updatable" filter in Explore; release notes in Installed; uninstall now cleans stale version dirs under `cache/`; GitHub Token configurable in the panel (About tab, stored in the settings hub, token-like fields masked); skeleton loading state with a retry button.
 - **v0.2.1** (2026-10-29): initial public release.

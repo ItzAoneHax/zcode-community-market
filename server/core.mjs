@@ -8,7 +8,7 @@ import { cli } from "./cli.mjs";
 import { loadBundledIndex, fetchGithub, refreshCache, mergedCatalog, dataDir } from "./catalog.mjs";
 import { settings } from "./settings.mjs";
 
-export const PLUGIN_VERSION = "0.3.0";
+export const PLUGIN_VERSION = "0.3.1";
 const SELF_ID = "zcode-community-market@zcode-community-market";
 export const PLUGIN_ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const bundledIndex = loadBundledIndex(PLUGIN_ROOT);
@@ -67,24 +67,35 @@ async function installEntry(entry) {
   }
   // marketplace / marketplace-try 共用：先加市场（已存在视为成功）
   let mktId = inst.marketplace || null;
+  // 防覆盖：该 id 的市场已存在（含用户本地同名市场）时不再 add，避免把既有源换成远端仓库
+  let existingSameId = null;
   try {
-    const out = await cli.marketplaceAdd(inst.source);
-    const m = /Added marketplace ([A-Za-z0-9_.@-]+)/.exec(out || "");
-    if (m) mktId = m[1];
-  } catch (e) {
-    const s = String(e?.message || e);
-    if (!/already|exists/i.test(s)) {
-      if (inst.type === "marketplace") throw e;
-      return { ok: false, manual: true, repo: entry.repo, url: `https://github.com/${entry.repo}`, message: `自动添加市场失败：${s.slice(0, 200)}` };
-    }
-    // 已存在：从市场列表反查 id
+    const mkts0 = await cli.marketplaceList();
+    const list0 = Array.isArray(mkts0) ? mkts0 : mkts0?.marketplaces || [];
+    existingSameId = list0.find((x) => (x.name || x.id) === mktId) || null;
+  } catch { /* 列表读不到就按原流程 add */ }
+  if (existingSameId) {
+    mktId = existingSameId.name || existingSameId.id;
+  } else {
     try {
-      const mkts = await cli.marketplaceList();
-      const hit = (Array.isArray(mkts) ? mkts : mkts?.marketplaces || []).find(
-        (x) => inst.source.startsWith(String(x?.source?.repo || x?.source?.url || "\u0000")) || x.name === inst.marketplace
-      );
-      if (hit) mktId = hit.name || hit.id;
-    } catch { /* 用 hint */ }
+      const out = await cli.marketplaceAdd(inst.source);
+      const m = /Added marketplace ([A-Za-z0-9_.@-]+)/.exec(out || "");
+      if (m) mktId = m[1];
+    } catch (e) {
+      const s = String(e?.message || e);
+      if (!/already|exists/i.test(s)) {
+        if (inst.type === "marketplace") throw e;
+        return { ok: false, manual: true, repo: entry.repo, url: `https://github.com/${entry.repo}`, message: `自动添加市场失败：${s.slice(0, 200)}` };
+      }
+      // 已存在：从市场列表反查 id
+      try {
+        const mkts = await cli.marketplaceList();
+        const hit = (Array.isArray(mkts) ? mkts : mkts?.marketplaces || []).find(
+          (x) => inst.source.startsWith(String(x?.source?.repo || x?.source?.url || "\u0000")) || x.name === inst.marketplace
+        );
+        if (hit) mktId = hit.name || hit.id;
+      } catch { /* 用 hint */ }
+    }
   }
   if (!mktId) mktId = inst.marketplace || inst.pluginName;
   // 在该市场里找插件（优先 pluginName，否则取该市场唯一可用项）
@@ -304,7 +315,10 @@ tool({
     const mkt = id.includes("@") ? id.split("@").slice(1).join("@") : "";
     if (mkt) await cli.marketplaceUpdate(mkt).catch(() => {});
     const out = await cli.update(id);
-    return { text: out, structured: { ok: true, message: out.split("\n").slice(-1)[0] || "updated" } };
+    // 更新完成后清走旧版本目录（对照已装清单，只删未引用的）
+    const cleanup = pluginCacheCleanup(id);
+    const msg = (out.split("\n").slice(-1)[0] || "updated") + (cleanup.removed.length ? `（已清理旧版本缓存 ${cleanup.removed.join(", ")}）` : "");
+    return { text: out, structured: { ok: true, message: msg, cacheRemoved: cleanup.removed } };
   },
 });
 

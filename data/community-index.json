@@ -1,6 +1,6 @@
 {
-  "$comment": "zcode-community-market 内置精选索引。install.type: marketplace=仓库自带插件市场(已验证)；marketplace-try=尝试当作市场添加，失败则提示手动安装；manual=需按仓库说明手动安装。GitHub 刷新会合并新仓库（内置条目优先）。",
-  "updatedAt": "2026-10-29",
+  "$comment": "zcode-community-market 内置精选索引。install.type: marketplace=仓库自带插件市场(已验证)；marketplace-try=尝试当作市场添加，失败则提示手动安装；manual=需按仓库说明手动安装。GitHub 刷新会合并新仓库（内置条目优先）。2026-10-30：全量刷新 topic，新增条目带 unverified 标记，同 id 市场已存在时安装流程不会再覆盖既有源。",
+  "updatedAt": "2026-10-30",
   "plugins": [
     {
       "name": "zcode-token-usage-statusbar",
@@ -8,103 +8,13 @@
       "displayName": "用量状态栏",
       "description": "对话窗口底部状态栏：生成速度 tok/s、首字延迟、Token 用量、上下文占比、多厂商套餐额度（含 MiMo Cookie）。",
       "category": "monitoring",
-      "install": { "type": "marketplace", "source": "ByteRax/zcode-token-usage-statusbar#plugin-releases", "marketplace": "zusage-marketplace", "pluginName": "zcode-token-usage-statusbar" }
-    },
-    {
-      "name": "zcode-fox-widget",
-      "repo": "pigeon189/zcode-fox-widget",
-      "displayName": "狐娘小挂件",
-      "description": "狐娘桌宠/余额挂件，DeepSeek 等账户余额显示，兼容 ZCode 与 WorkBuddy。",
-      "category": "appearance",
-      "install": { "type": "marketplace-try", "source": "pigeon189/zcode-fox-widget", "pluginName": "zcode-fox-widget" }
-    },
-    {
-      "name": "zcode-beautify",
-      "repo": "Logocceai/zcode-beautify",
-      "displayName": "ZCode 美化",
-      "description": "壁纸 + Material Design 3 (Monet) 动态配色，含可拖拽实时设置面板，支持 Wallpaper Engine 场景壁纸。",
-      "category": "appearance",
-      "install": { "type": "marketplace-try", "source": "Logocceai/zcode-beautify", "pluginName": "zcode-beautify" }
-    },
-    {
-      "name": "zcode-speed-panel",
-      "repo": "Masterchiefm/zcode-speed-panel",
-      "displayName": "速度仪表盘",
-      "description": "实时输出速度仪表盘：桌宠/迷你仪表/速度胶囊（Tauri 2 + Rust）。",
-      "category": "monitoring",
-      "install": { "type": "marketplace-try", "source": "Masterchiefm/zcode-speed-panel", "pluginName": "zcode-speed-panel" }
-    },
-    {
-      "name": "zcode-tps-monitor",
-      "repo": "shy3130/zcode-tps-monitor",
-      "displayName": "TPS 监控",
-      "description": "每轮回复末尾显示真实 tok/s，附监控大屏与 /tps 命令。",
-      "category": "monitoring",
-      "install": { "type": "marketplace-try", "source": "shy3130/zcode-tps-monitor", "pluginName": "zcode-tps-monitor" }
-    },
-    {
-      "name": "zcode-toolkit",
-      "repo": "c80361619/zcode-toolkit",
-      "displayName": "工具箱",
-      "description": "桌面客户端增强：思考档位、用量图表、TPS 状态栏（纯 Python）。",
-      "category": "appearance",
-      "install": { "type": "marketplace-try", "source": "c80361619/zcode-toolkit", "pluginName": "zcode-toolkit" }
-    },
-    {
-      "name": "zcode-auto-resume",
-      "repo": "cv-superding/zcode-auto-resume",
-      "displayName": "自动继续",
-      "description": "回合因临时错误中断时自动继续（Stop 钩子 + 重试）。",
-      "category": "productivity",
-      "install": { "type": "marketplace-try", "source": "cv-superding/zcode-auto-resume", "pluginName": "zcode-auto-resume" }
-    },
-    {
-      "name": "zcode-tokmon",
-      "repo": "EV12138/zcode-tokmon",
-      "displayName": "Token 监控",
-      "description": "零侵入的 Token 用量与速率监控（本地 + SSH 远程）。",
-      "category": "monitoring",
-      "install": { "type": "marketplace-try", "source": "EV12138/zcode-tokmon", "pluginName": "zcode-tokmon" }
-    },
-    {
-      "name": "zcode-quota",
-      "repo": "2877905731/zcode-quota",
-      "displayName": "余额状态条",
-      "description": "API 余额与生成速度状态条，DeepSeek 余额查询。",
-      "category": "monitoring",
-      "install": { "type": "marketplace-try", "source": "2877905731/zcode-quota", "pluginName": "zcode-quota" }
-    },
-    {
-      "name": "zcode-session-manager",
-      "repo": "Mia0a-hi/zcode-session-manager",
-      "displayName": "会话管理器",
-      "description": "超快会话管理与跨端记忆中继，桌面/移动 IM 上下文无缝接续。",
-      "category": "productivity",
-      "install": { "type": "marketplace-try", "source": "Mia0a-hi/zcode-session-manager", "pluginName": "zcode-session-manager" }
-    },
-    {
-      "name": "zcode-context",
-      "repo": "Kevinzzz6/zcode-context",
-      "displayName": "上下文可视化",
-      "description": "只读离线的上下文可视化侧栏：组成、趋势、压缩事件。",
-      "category": "monitoring",
-      "install": { "type": "marketplace-try", "source": "Kevinzzz6/zcode-context", "pluginName": "zcode-context" }
-    },
-    {
-      "name": "zcode-git-worktrees",
-      "repo": "agallardol/zcode-git-worktrees",
-      "displayName": "Git Worktrees",
-      "description": "Git worktree 支持：并行隔离工作、快照、会话隔离。",
-      "category": "dev-tools",
-      "install": { "type": "marketplace-try", "source": "agallardol/zcode-git-worktrees", "pluginName": "zcode-git-worktrees" }
-    },
-    {
-      "name": "OhMyZcode",
-      "repo": "djt889/OhMyZcode",
-      "displayName": "OhMyZcode",
-      "description": "多 agent 并行编排、访谈式规划与评审验收。",
-      "category": "agent",
-      "install": { "type": "marketplace-try", "source": "djt889/OhMyZcode", "pluginName": "OhMyZcode" }
+      "install": {
+        "type": "marketplace",
+        "source": "ByteRax/zcode-token-usage-statusbar#plugin-releases",
+        "marketplace": "zusage-marketplace",
+        "pluginName": "zcode-token-usage-statusbar"
+      },
+      "stars": 102
     },
     {
       "name": "ZCode-Agent-Kit",
@@ -113,7 +23,146 @@
       "description": "在其它 harness（Claude Code 等）中使用 ZCode token 订阅。",
       "category": "agent",
       "unverified": true,
-      "install": { "type": "manual", "source": "ZepiGit/ZCode-Agent-Kit" }
+      "install": {
+        "type": "manual",
+        "source": "ZepiGit/ZCode-Agent-Kit"
+      },
+      "stars": 81
+    },
+    {
+      "name": "zcode-fox-widget",
+      "repo": "pigeon189/zcode-fox-widget",
+      "displayName": "狐娘小挂件",
+      "description": "狐娘桌宠/余额挂件，DeepSeek 等账户余额显示，兼容 ZCode 与 WorkBuddy。",
+      "category": "appearance",
+      "install": {
+        "type": "marketplace",
+        "source": "pigeon189/zcode-fox-widget",
+        "marketplace": "zcode-fox-local",
+        "pluginName": "zcode-fox-widget"
+      },
+      "stars": 47
+    },
+    {
+      "name": "zcode-speed-panel",
+      "repo": "Masterchiefm/zcode-speed-panel",
+      "displayName": "速度仪表盘",
+      "description": "实时输出速度仪表盘：桌宠/迷你仪表/速度胶囊（Tauri 2 + Rust）。（GitHub 仓库根无 marketplace.json，按 README 下载发布包安装）",
+      "category": "monitoring",
+      "install": {
+        "type": "manual",
+        "source": "Masterchiefm/zcode-speed-panel"
+      },
+      "stars": 35
+    },
+    {
+      "name": "zcode-tps-monitor",
+      "repo": "shy3130/zcode-tps-monitor",
+      "displayName": "TPS 监控",
+      "description": "每轮回复末尾显示真实 tok/s，附监控大屏与 /tps 命令。",
+      "category": "monitoring",
+      "install": {
+        "type": "marketplace",
+        "source": "shy3130/zcode-tps-monitor",
+        "marketplace": "tps-local-marketplace",
+        "pluginName": "zcode-tps-monitor"
+      },
+      "stars": 33
+    },
+    {
+      "name": "zcode-toolkit",
+      "repo": "c80361619/zcode-toolkit",
+      "displayName": "工具箱",
+      "description": "桌面客户端增强：思考档位、用量图表、TPS 状态栏（纯 Python）。",
+      "category": "appearance",
+      "install": {
+        "type": "marketplace",
+        "source": "c80361619/zcode-toolkit",
+        "marketplace": "zcode-toolkit",
+        "pluginName": "zcode-toolkit"
+      },
+      "stars": 18
+    },
+    {
+      "name": "zcode-auto-resume",
+      "repo": "cv-superding/zcode-auto-resume",
+      "displayName": "自动继续",
+      "description": "回合因临时错误中断时自动继续（Stop 钩子 + 重试）。",
+      "category": "productivity",
+      "install": {
+        "type": "marketplace",
+        "source": "cv-superding/zcode-auto-resume",
+        "marketplace": "zcode-auto-resume-local",
+        "pluginName": "zcode-auto-resume"
+      },
+      "stars": 13
+    },
+    {
+      "name": "zcode-beautify",
+      "repo": "Logocceai/zcode-beautify",
+      "displayName": "ZCode 美化",
+      "description": "壁纸 + Material Design 3 (Monet) 动态配色，含可拖拽实时设置面板，支持 Wallpaper Engine 场景壁纸。",
+      "category": "appearance",
+      "install": {
+        "type": "marketplace-try",
+        "source": "Logocceai/zcode-beautify",
+        "pluginName": "zcode-beautify"
+      },
+      "stars": 6
+    },
+    {
+      "name": "zcode-tokmon",
+      "repo": "EV12138/zcode-tokmon",
+      "displayName": "Token 监控",
+      "description": "零侵入的 Token 用量与速率监控（本地 + SSH 远程）。",
+      "category": "monitoring",
+      "install": {
+        "type": "marketplace",
+        "source": "EV12138/zcode-tokmon",
+        "marketplace": "tokmon-marketplace",
+        "pluginName": "zcode-tokmon"
+      },
+      "stars": 5
+    },
+    {
+      "name": "zcode-quota",
+      "repo": "2877905731/zcode-quota",
+      "displayName": "余额状态条",
+      "description": "API 余额与生成速度状态条，DeepSeek 余额查询。",
+      "category": "monitoring",
+      "install": {
+        "type": "marketplace-try",
+        "source": "2877905731/zcode-quota",
+        "pluginName": "zcode-quota"
+      },
+      "stars": 5
+    },
+    {
+      "name": "zcode-session-manager",
+      "repo": "Mia0a-hi/zcode-session-manager",
+      "displayName": "会话管理器",
+      "description": "超快会话管理与跨端记忆中继，桌面/移动 IM 上下文无缝接续。",
+      "category": "productivity",
+      "install": {
+        "type": "marketplace-try",
+        "source": "Mia0a-hi/zcode-session-manager",
+        "pluginName": "zcode-session-manager"
+      },
+      "stars": 5
+    },
+    {
+      "name": "zcode-context",
+      "repo": "Kevinzzz6/zcode-context",
+      "displayName": "上下文可视化",
+      "description": "只读离线的上下文可视化侧栏：组成、趋势、压缩事件。",
+      "category": "monitoring",
+      "install": {
+        "type": "marketplace",
+        "source": "Kevinzzz6/zcode-context",
+        "marketplace": "zcode-context-marketplace",
+        "pluginName": "zcode-context"
+      },
+      "stars": 5
     },
     {
       "name": "testcase",
@@ -121,7 +170,671 @@
       "displayName": "测试用例 Skill",
       "description": "从需求到代码：审计规格、生成测试、构建至通过。",
       "category": "dev-tools",
-      "install": { "type": "marketplace-try", "source": "xtieume/testcase", "pluginName": "testcase" }
+      "install": {
+        "type": "marketplace-try",
+        "source": "xtieume/testcase",
+        "pluginName": "testcase"
+      },
+      "stars": 5
+    },
+    {
+      "name": "zcode-git-worktrees",
+      "repo": "agallardol/zcode-git-worktrees",
+      "displayName": "Git Worktrees",
+      "description": "Git worktree 支持：并行隔离工作、快照、会话隔离。",
+      "category": "dev-tools",
+      "install": {
+        "type": "marketplace-try",
+        "source": "agallardol/zcode-git-worktrees",
+        "pluginName": "zcode-git-worktrees"
+      },
+      "stars": 4
+    },
+    {
+      "name": "OhMyZcode",
+      "repo": "djt889/OhMyZcode",
+      "displayName": "OhMyZcode",
+      "description": "多 agent 并行编排、访谈式规划与评审验收。",
+      "category": "agent",
+      "install": {
+        "type": "marketplace-try",
+        "source": "djt889/OhMyZcode",
+        "pluginName": "OhMyZcode"
+      },
+      "stars": 3
+    },
+    {
+      "name": "dragon-agents",
+      "repo": "VirInvictus/dragon-agents",
+      "displayName": "研究子代理六件套",
+      "description": "六只只读研究子代理：仓库地图、文档漂移审计、共享库级联检查、规范审查、CI 分诊、AI 腔检测。",
+      "category": "agent",
+      "stars": 3,
+      "install": {
+        "type": "marketplace",
+        "source": "VirInvictus/dragon-agents",
+        "marketplace": "dragon-agents",
+        "pluginName": "dragon-agents"
+      },
+      "unverified": true
+    },
+    {
+      "name": "workbuddy-connect",
+      "repo": "luoxh8/workbuddy-connect",
+      "displayName": "WorkBuddy 接入",
+      "description": "把本机 WorkBuddy（国内/国际版）账号的模型接入 ZCode，含免费模型；本地桥接 + 插件。",
+      "category": "productivity",
+      "stars": 3,
+      "install": {
+        "type": "marketplace",
+        "source": "luoxh8/workbuddy-connect",
+        "marketplace": "workbuddy-connect",
+        "pluginName": "workbuddy-connect"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-powerpack",
+      "repo": "imserhatdemir/zcode-powerpack",
+      "displayName": "GLM 手册包",
+      "description": "GLM 使用手册、技能与 MCP 合集。",
+      "category": "dev-tools",
+      "stars": 3,
+      "install": {
+        "type": "marketplace-try",
+        "source": "imserhatdemir/zcode-powerpack",
+        "pluginName": "zcode-powerpack"
+      },
+      "unverified": true
+    },
+    {
+      "name": "workspace-guard",
+      "repo": "XieZongChen/zcode-workspace-guard",
+      "displayName": "工作区沙箱",
+      "description": "让 ZCode 在项目中执行时有类似 DSH 工作区沙箱的效果，防误写项目外文件。",
+      "category": "productivity",
+      "stars": 2,
+      "install": {
+        "type": "marketplace",
+        "source": "XieZongChen/zcode-workspace-guard",
+        "marketplace": "zcode-workspace-guard",
+        "pluginName": "workspace-guard"
+      },
+      "unverified": true
+    },
+    {
+      "name": "usage-detail",
+      "repo": "axdlee/zcode-usage-detail",
+      "displayName": "用量明细",
+      "description": "逐条查看本地模型用量明细，区分 GLM 官方套餐与 BYOK，交互式仪表盘。",
+      "category": "monitoring",
+      "stars": 2,
+      "install": {
+        "type": "marketplace",
+        "source": "axdlee/zcode-usage-detail",
+        "marketplace": "zcode-usage-detail",
+        "pluginName": "usage-detail"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-extensions",
+      "repo": "notmike101/zcode-extensions",
+      "displayName": "扩展宿主",
+      "description": "抗升级的 ZCode Electron 扩展宿主框架（开发者向），按仓库说明安装。",
+      "category": "dev-tools",
+      "stars": 2,
+      "install": {
+        "type": "manual",
+        "source": "notmike101/zcode-extensions"
+      },
+      "unverified": true
+    },
+    {
+      "name": "note-curator",
+      "repo": "Huayudong/note-curator",
+      "displayName": "笔记策展",
+      "description": "把网页链接与本地草稿整理成结构化中英笔记归档进 Obsidian，全库查重合并、自动双链。",
+      "category": "productivity",
+      "stars": 2,
+      "install": {
+        "type": "marketplace-try",
+        "source": "Huayudong/note-curator",
+        "pluginName": "note-curator"
+      },
+      "unverified": true
+    },
+    {
+      "name": "novelist",
+      "repo": "GlotTale/novelist",
+      "displayName": "网文写作",
+      "description": "一个命令部署全部写作基础设施；8 个 Hook 自动注入记忆/细纲/文风，零全局污染。",
+      "category": "productivity",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "GlotTale/novelist",
+        "marketplace": "novelist-marketplace",
+        "pluginName": "novelist"
+      },
+      "unverified": true
+    },
+    {
+      "name": "remotion",
+      "repo": "AIwork4me/zcode-remotion",
+      "displayName": "Remotion 工程",
+      "description": "Remotion 视频工程可靠性层：官方技能、环境预检、视觉 QA、可验证渲染。",
+      "category": "dev-tools",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "AIwork4me/zcode-remotion",
+        "marketplace": "zcode-remotion",
+        "pluginName": "remotion"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-fence",
+      "repo": "Momenttttt/zcode-fence",
+      "displayName": "写入围栏",
+      "description": "确定性围栏：灾难命令拦截 + 项目写围栏，Windows 优先、仅询问、零依赖。",
+      "category": "productivity",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "Momenttttt/zcode-fence",
+        "marketplace": "zcode-fence-market",
+        "pluginName": "zcode-fence"
+      },
+      "unverified": true
+    },
+    {
+      "name": "deepseek-web-search",
+      "repo": "Ming-QWQ520/deepseek-web-search",
+      "displayName": "联网搜索",
+      "description": "DeepSeek 网页搜索与页面抓取 MCP 插件，附 Agent 使用技能。",
+      "category": "dev-tools",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "Ming-QWQ520/deepseek-web-search",
+        "marketplace": "deepseek-web-search-market",
+        "pluginName": "deepseek-web-search"
+      },
+      "unverified": true
+    },
+    {
+      "name": "token-meter",
+      "repo": "alixntuyt-eng/zcode-token-meter",
+      "displayName": "悬浮速度窗",
+      "description": "常置顶小窗：实时输出速度 tok/s 与提示缓存命中率，无控制台、无网络访问。",
+      "category": "monitoring",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "alixntuyt-eng/zcode-token-meter",
+        "marketplace": "zcode-token-meter",
+        "pluginName": "token-meter"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-auto-compact",
+      "repo": "LeoK77S/zcode-auto-compact",
+      "displayName": "自动压缩",
+      "description": "按模型上下文窗口百分比自动触发原生压缩（默认 80%，可调）。",
+      "category": "productivity",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "LeoK77S/zcode-auto-compact",
+        "marketplace": "leok77s-local",
+        "pluginName": "zcode-auto-compact"
+      },
+      "unverified": true
+    },
+    {
+      "name": "autoresearch",
+      "repo": "luochang212/zcode-autoresearch",
+      "displayName": "自主实验",
+      "description": "自主实验循环：让 coding agent 基于固定度量自动迭代优化。",
+      "category": "agent",
+      "stars": 1,
+      "install": {
+        "type": "marketplace",
+        "source": "luochang212/zcode-autoresearch",
+        "marketplace": "zcode-autoresearch",
+        "pluginName": "autoresearch"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zusage-clannadad",
+      "repo": "Clannadad/zcode-token-usage-statusbar",
+      "displayName": "额度状态条（Clannadad 版）",
+      "description": "zusage 衍生：MiniMax/ClinePass/Kimi/GLM 等套餐额度与重置倒计时。市场 id 与原版相同，需按仓库说明手动安装。",
+      "category": "monitoring",
+      "stars": 1,
+      "install": {
+        "type": "manual",
+        "source": "Clannadad/zcode-token-usage-statusbar"
+      },
+      "unverified": true
+    },
+    {
+      "name": "fun-code",
+      "repo": "temmeik/fun-code",
+      "displayName": "捣蛋模式",
+      "description": "娱乐插件：AI 表现得像个过度自信的菜鸟，在简单处埋搞笑 bug，说停就正常。（整活向）",
+      "category": "other",
+      "stars": 1,
+      "install": {
+        "type": "marketplace-try",
+        "source": "temmeik/fun-code",
+        "pluginName": "fun-code"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-ext-stats",
+      "repo": "winterallen/zcode-ext-stats",
+      "displayName": "会话统计",
+      "description": "适用于 ZCode 的非官方会话统计扩展，按仓库说明安装。",
+      "category": "monitoring",
+      "stars": 1,
+      "install": {
+        "type": "manual",
+        "source": "winterallen/zcode-ext-stats"
+      },
+      "unverified": true
+    },
+    {
+      "name": "arkpilot",
+      "repo": "taobaoaz/arkpilot",
+      "displayName": "鸿蒙开发",
+      "description": "30 个 MCP 工具驱动 HarmonyOS NEXT（ArkTS）开发：环境、构建、设备、UI 自动化。",
+      "category": "dev-tools",
+      "stars": 1,
+      "install": {
+        "type": "manual",
+        "source": "taobaoaz/arkpilot"
+      },
+      "unverified": true
+    },
+    {
+      "name": "instrument",
+      "repo": "Againstthewindtofly/zcode-instrument",
+      "displayName": "回复仪表盘",
+      "description": "会话侧栏仪表盘：首字延迟、速度、Token 用量、耗时拆分、上下文与额度。",
+      "category": "monitoring",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Againstthewindtofly/zcode-instrument",
+        "marketplace": "zcode-instrument-marketplace",
+        "pluginName": "instrument"
+      },
+      "unverified": true
+    },
+    {
+      "name": "session-mailbox",
+      "repo": "mkosinov/zcode-session-mailbox",
+      "displayName": "会话信箱",
+      "description": "经内置 MCP 在多个 ZCode 会话之间交换消息。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "mkosinov/zcode-session-mailbox",
+        "marketplace": "zcode-session-mailbox",
+        "pluginName": "session-mailbox"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zero-token",
+      "repo": "kzxl/zero-token",
+      "displayName": "零浪费守卫",
+      "description": "紧凑上下文工具与零浪费守卫，阻止 AI 无谓烧 token。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "kzxl/zero-token",
+        "marketplace": "zero-token",
+        "pluginName": "zero-token"
+      },
+      "unverified": true
+    },
+    {
+      "name": "chuigong",
+      "repo": "rouyiemei/chuigong",
+      "displayName": "垂拱编排",
+      "description": "主对话只做编排，廉价 worker 干活的多层代理工作流。",
+      "category": "agent",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "rouyiemei/chuigong",
+        "marketplace": "chuigong",
+        "pluginName": "chuigong"
+      },
+      "unverified": true
+    },
+    {
+      "name": "session-buddy",
+      "repo": "Yogurt1900/zcode-session-buddy",
+      "displayName": "产物归档",
+      "description": "让每段 AI 对话拥有自己的文件夹：任务产物自动归档，附 AGENTS.md 通用规则。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Yogurt1900/zcode-session-buddy",
+        "marketplace": "session-buddy-market",
+        "pluginName": "session-buddy"
+      },
+      "unverified": true
+    },
+    {
+      "name": "multi-model-bridge",
+      "repo": "Et3rW/multi-model-bridge",
+      "displayName": "多模型桥",
+      "description": "主模型缺能力（图像/视觉理解等）时，把子任务路由给外部模型并整合回推理。",
+      "category": "agent",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Et3rW/multi-model-bridge",
+        "marketplace": "multi-model-bridge-marketplace",
+        "pluginName": "multi-model-bridge"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-tokline",
+      "repo": "nengong-ai/zcode-tokline",
+      "displayName": "速率行",
+      "description": "每轮回复末尾显示首字/本轮/轮均 tok/s；纯本地读 usage 数据库，零依赖。",
+      "category": "monitoring",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "nengong-ai/zcode-tokline",
+        "marketplace": "zcode-tokline-market",
+        "pluginName": "zcode-tokline"
+      },
+      "unverified": true
+    },
+    {
+      "name": "agent-team",
+      "repo": "Vincent-chk/zcode-agent-team",
+      "displayName": "智能体团队",
+      "description": "在会话中创建并协调多个 teammate 子会话，共享任务板与成员消息。",
+      "category": "agent",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Vincent-chk/zcode-agent-team",
+        "marketplace": "agent-team-dev",
+        "pluginName": "agent-team"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-touchbar",
+      "repo": "GreendaMi/ZcodeTouchBar",
+      "displayName": "TouchBar",
+      "description": "给 ZCode 增加 MacBook TouchBar 支持。",
+      "category": "appearance",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "GreendaMi/ZcodeTouchBar",
+        "marketplace": "zcode-touchbar-local",
+        "pluginName": "zcode-touchbar"
+      },
+      "unverified": true
+    },
+    {
+      "name": "code-modernization",
+      "repo": "re-obscura/zcode-code-modernization",
+      "displayName": "代码现代化",
+      "description": "引导式遗留代码现代化：评估、业务规则、分步改造。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "re-obscura/zcode-code-modernization",
+        "marketplace": "zcode-code-modernization",
+        "pluginName": "code-modernization"
+      },
+      "unverified": true
+    },
+    {
+      "name": "automotive-protocol-re",
+      "repo": "Ydjin1984/automotive-protocol-re",
+      "displayName": "汽车协议逆向",
+      "description": "汽车诊断与 ECU 编程协议逆向 ZCode 插件。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Ydjin1984/automotive-protocol-re",
+        "marketplace": "automotive-protocol-re",
+        "pluginName": "automotive-protocol-re"
+      },
+      "unverified": true
+    },
+    {
+      "name": "shadow-dev-workflow",
+      "repo": "stack-wuh/shadow-dev-workflow",
+      "displayName": "影子工作流",
+      "description": "自包含 Knowledge 驱动开发工作流：propose → apply → review → release。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "stack-wuh/shadow-dev-workflow",
+        "marketplace": "shadow-dev-workflow-local",
+        "pluginName": "shadow-dev-workflow"
+      },
+      "unverified": true
+    },
+    {
+      "name": "ai-ui-aesthetics",
+      "repo": "Jaye2610/ai-ui-aesthetics",
+      "displayName": "前端审美",
+      "description": "教 AI 写出高级感前端界面的美学技能 + MCP 集成。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "Jaye2610/ai-ui-aesthetics",
+        "marketplace": "ai-ui-aesthetics",
+        "pluginName": "ai-ui-aesthetics"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-plugins",
+      "repo": "kingsword09/zcode-plugins",
+      "displayName": "CLI 插件集",
+      "description": "ZCode CLI 运行时的非官方社区插件集合。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "kingsword09/zcode-plugins",
+        "pluginName": "zcode-plugins"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-nvidia-ratelimit-hook",
+      "repo": "nimabhk/zcode-nvidia-ratelimit-hook",
+      "displayName": "NVIDIA 限速钩子",
+      "description": "遵守 NVIDIA Build 免费 API 40 RPM 限速的 ZCode 钩子。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "manual",
+        "source": "nimabhk/zcode-nvidia-ratelimit-hook"
+      },
+      "unverified": true
+    },
+    {
+      "name": "fusion-zcode-plugin",
+      "repo": "roman-ryzenadvanced/fusion-zcode-plugin",
+      "displayName": "Fusion 编排",
+      "description": "混合智能多模型编排：自动切换/分流模型。",
+      "category": "agent",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "roman-ryzenadvanced/fusion-zcode-plugin",
+        "pluginName": "fusion-zcode-plugin"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-rtl",
+      "repo": "saboorsarem/zcode-rtl",
+      "displayName": "RTL 支持",
+      "description": "为 ZCode 提供从右到左（RTL）的文字与布局支持。",
+      "category": "appearance",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "saboorsarem/zcode-rtl",
+        "pluginName": "zcode-rtl"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-workspace",
+      "repo": "Yoahoug/zcode-workspace",
+      "displayName": "插件集（搜索/NewAPI）",
+      "description": "zcode-websearch（Tavily 联网搜索，只回链接与短摘要）与 newapi-admin 等。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "Yoahoug/zcode-workspace",
+        "pluginName": "zcode-websearch"
+      },
+      "unverified": true
+    },
+    {
+      "name": "lazyzcode",
+      "repo": "Acfufu/lazyzcode",
+      "displayName": "纪律层",
+      "description": "AI 编码工作流纪律层：计划、执行、留证、复盘。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "Acfufu/lazyzcode",
+        "pluginName": "lazyzcode"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-repo-wiki",
+      "repo": "Acfufu/zcode-repo-wiki",
+      "displayName": "仓库 Wiki",
+      "description": "仅本地的仓库 Wiki：Agent 读代码写分页文档，离线浏览。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "manual",
+        "source": "Acfufu/zcode-repo-wiki"
+      },
+      "unverified": true
+    },
+    {
+      "name": "taskswarm",
+      "repo": "Wersky/taskswarm",
+      "displayName": "任务蜂群",
+      "description": "任务树多级拆解 + 按依赖波次并行派发子代理 + 共享 MCP 看板，带 PPR 审核门。",
+      "category": "agent",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "Wersky/taskswarm",
+        "pluginName": "taskswarm"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-scheduler",
+      "repo": "notmike101/zcode-scheduler",
+      "displayName": "定时任务",
+      "description": "ZCode Desktop Extensions 的调度器扩展（.zdp 格式），按仓库说明安装。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "manual",
+        "source": "notmike101/zcode-scheduler"
+      },
+      "unverified": true
+    },
+    {
+      "name": "claritykit",
+      "repo": "maxi3777/claritykit",
+      "displayName": "问答建应用",
+      "description": "通过问答澄清应用创建流程的技能包（多宿主：ZCode/Claude/Codex）。",
+      "category": "productivity",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "maxi3777/claritykit",
+        "pluginName": "claritykit"
+      },
+      "unverified": true
+    },
+    {
+      "name": "safe-github-publish-v2",
+      "repo": "XIAOXINYIHUA/safe-github-publish-v2",
+      "displayName": "安全发布",
+      "description": "阶段门禁式密钥与隐私审查（含 Git 历史）+ push 前拦截守卫。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "XIAOXINYIHUA/safe-github-publish-v2",
+        "pluginName": "safe-github-publish-v2"
+      },
+      "unverified": true
+    },
+    {
+      "name": "idea2prototype",
+      "repo": "ahmed-3m/idea2prototype",
+      "displayName": "点子到原型",
+      "description": "把点子变成带测试的原型：省 token 脚手架 + 一条命令验证（多宿主）。",
+      "category": "dev-tools",
+      "stars": 0,
+      "install": {
+        "type": "marketplace-try",
+        "source": "ahmed-3m/idea2prototype",
+        "pluginName": "idea2prototype"
+      },
+      "unverified": true
+    },
+    {
+      "name": "zcode-community-market",
+      "repo": "ItzAoneHax/zcode-community-market",
+      "displayName": "社区插件市场（本插件）",
+      "description": "浏览、安装、更新与管理 ZCode 社区插件的侧栏市场；共享设置中心；可选设置页入口。",
+      "category": "utilities",
+      "stars": 0,
+      "install": {
+        "type": "marketplace",
+        "source": "ItzAoneHax/zcode-community-market",
+        "marketplace": "zcode-community-market",
+        "pluginName": "zcode-community-market"
+      }
     }
   ]
 }
